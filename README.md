@@ -6,7 +6,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/wavekat-cli.svg)](https://crates.io/crates/wavekat-cli)
 
-Command-line client (`wk`) for the [WaveKat platform](https://github.com/wavekat/wavekat-platform).
+Command-line client (`wk`) for the [WaveKat platform](https://platform.wavekat.com).
 
 > [!NOTE]
 > Early development. `wk login` now uses a browser-based loopback OAuth
@@ -123,9 +123,6 @@ together with the matching platform changes. It will add:
 - `wk exports create` / `list` / `show` / `download`.
 - A built-in adapter that materialises the canonical snapshot into the
   HuggingFace `datasets` format Pipecat `smart-turn` consumes.
-
-See the platform's [docs/06-export.md](https://github.com/wavekat/wavekat-platform/blob/main/docs/06-export.md)
-for the design.
 
 ## License
 
