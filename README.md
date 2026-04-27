@@ -1,6 +1,12 @@
-# wavekat-cli (`wk`)
+<p align="center">
+  <a href="https://github.com/wavekat/wavekat-cli">
+    <img src="https://github.com/wavekat/wavekat-brand/raw/main/assets/banners/wavekat-cli-narrow.svg" alt="WaveKat CLI">
+  </a>
+</p>
 
-Command-line client for the [WaveKat platform](https://github.com/wavekat/wavekat-platform).
+[![Crates.io](https://img.shields.io/crates/v/wavekat-cli.svg)](https://crates.io/crates/wavekat-cli)
+
+Command-line client (`wk`) for the [WaveKat platform](https://github.com/wavekat/wavekat-platform).
 
 > [!NOTE]
 > Early development. `wk login` now uses a browser-based loopback OAuth
