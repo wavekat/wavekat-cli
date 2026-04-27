@@ -2,17 +2,16 @@
 
 Command-line client for the [WaveKat platform](https://github.com/wavekat/wavekat-platform).
 
-> [!WARNING]
-> Early development. The auth model is intentionally minimal in v1 (paste a
-> session cookie). A proper device-code flow lands together with the export
-> feature on the platform side.
+> [!NOTE]
+> Early development. `wk login` now uses a browser-based loopback OAuth
+> handshake (no more pasting cookies). Export commands are still pending.
 
 ## What it does today
 
 | Command | What it calls | What it shows |
 |---------|---------------|---------------|
-| `wk login`               | `GET /api/me` to verify | stores `{base_url, session_cookie}` under your config dir |
-| `wk logout`              | — | removes the stored credentials |
+| `wk login`               | loopback OAuth + `GET /api/me` | stores `{base_url, token}` under your config dir |
+| `wk logout`              | `POST /api/auth/cli/tokens/revoke-current` | revokes the token server-side and removes the local file |
 | `wk me`                  | `GET /api/me` | your login, id, name, email, role |
 | `wk projects list`       | `GET /api/projects` | paginated table of projects you can see |
 | `wk projects show <id>`  | `GET /api/projects/{id}` | project detail (raw JSON) |
@@ -40,33 +39,48 @@ Not yet — these will land once the first tagged release is cut. Releases will
 ship prebuilt binaries for macOS (Apple Silicon + Intel) and Linux (x86_64 +
 aarch64).
 
-## Sign in (v1: paste-the-cookie)
-
-The platform today only authenticates browser sessions via a signed
-`wk_session` cookie set after GitHub OAuth. Until the platform exposes a
-CLI-friendly auth flow (planned alongside the dataset export feature), `wk`
-reuses your browser session.
+## Sign in
 
 ```sh
-wk login --base-url https://platform.wavekat.com
+wk login
+# (or: wk login --base-url https://platform.wavekat.com)
 ```
 
-You'll be told to:
+What happens:
 
-1. Open the platform URL in your browser and sign in with GitHub.
-2. Open dev tools → Application → Cookies → the platform origin.
-3. Copy the value of the `wk_session` cookie and paste it at the prompt
-   (input is hidden).
+1. `wk` binds an ephemeral port on `127.0.0.1`.
+2. Your default browser opens to `<platform>/cli-login`. If you're not
+   already signed in, you're bounced through the normal "Sign in with
+   GitHub" flow first and come back automatically.
+3. You click **Authorize** on the platform's confirmation page.
+4. The platform redirects the browser to the loopback URL with a freshly
+   minted token; `wk` captures it, verifies against `/api/me`, and writes
+   it to your config file.
+5. The browser tab shows "You can close this tab" and you're done in your
+   terminal.
 
-`wk login` calls `/api/me` to verify the cookie before storing it. The cookie
-has a 7-day TTL; you'll need to re-run `wk login` after that.
+The token is a long-lived `wkcli_…` bearer credential. You can list and
+revoke tokens from your platform profile page; `wk logout` revokes the
+current token before clearing the local file.
 
-You can also pass it non-interactively:
+### Headless / SSH
+
+If no browser is available on the local machine, run:
 
 ```sh
-WK_BASE_URL=https://platform.wavekat.com WK_SESSION='…' wk login
-# or
-wk login --base-url … --session …
+wk login --no-browser
+```
+
+`wk` prints the authorization URL — open it on any browser that can
+reach the loopback port (typically with `ssh -L 1234:127.0.0.1:1234
+remote-host`, then open the URL the CLI prints).
+
+### CI / pre-minted token
+
+Pre-mint a token from the SPA (or the API), then:
+
+```sh
+WK_TOKEN='wkcli_…' WK_BASE_URL='https://platform.wavekat.com' wk login
 ```
 
 ### Where credentials are stored
@@ -100,7 +114,6 @@ wk annotations list <project-id> --label end_of_turn --review-status approved \
 The next milestone for the CLI is the **dataset export** feature, landing
 together with the matching platform changes. It will add:
 
-- Proper device-code login (no more cookie pasting).
 - `wk exports create` / `list` / `show` / `download`.
 - A built-in adapter that materialises the canonical snapshot into the
   HuggingFace `datasets` format Pipecat `smart-turn` consumes.
