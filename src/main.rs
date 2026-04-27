@@ -1,0 +1,51 @@
+use anyhow::Result;
+use clap::{Parser, Subcommand};
+
+mod client;
+mod commands;
+mod config;
+
+#[derive(Parser)]
+#[command(
+    name = "wk",
+    version,
+    about = "Command-line client for the WaveKat platform",
+    long_about = "Command-line client for the WaveKat platform.\n\nRun `wk login` to authenticate. \
+                  Credentials are stored under your platform config dir (e.g. ~/.config/wavekat/auth.json on Linux/macOS)."
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Authenticate against a WaveKat platform instance
+    Login(commands::login::Args),
+    /// Forget stored credentials
+    Logout,
+    /// Show the currently signed-in user (`GET /api/me`)
+    Me,
+    /// Manage projects
+    Projects {
+        #[command(subcommand)]
+        command: commands::projects::Cmd,
+    },
+    /// Manage annotations
+    Annotations {
+        #[command(subcommand)]
+        command: commands::annotations::Cmd,
+    },
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+    match cli.command {
+        Command::Login(args) => commands::login::run(args).await,
+        Command::Logout => commands::logout::run().await,
+        Command::Me => commands::me::run().await,
+        Command::Projects { command } => commands::projects::run(command).await,
+        Command::Annotations { command } => commands::annotations::run(command).await,
+    }
+}
