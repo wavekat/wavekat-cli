@@ -160,9 +160,11 @@ wk annotations list "$PROJECT_ID" \
 - **`wk exports create` blocks** until the platform finishes copying
   clips to R2. Seconds-to-minutes is normal. Exit status reflects
   success/failure of the whole operation, not just submission.
-- **`wk exports download` is single-threaded by design.** Don't
-  parallelise downloads against the same export — the platform side is
-  one Cloudflare Worker and concurrency just buys throttling.
+- **`wk exports download` fetches clips in parallel** (default 8
+  concurrent). Tune with `--concurrency N`; cranking past ~16 hits
+  Worker subrequest budgets without meaningfully improving wall time.
+  The bar tracks every manifest entry — already-on-disk clips count
+  toward progress, so resumes look fast.
 - **All list endpoints paginate.** Default `--page-size` is 20. Use
   `total` / `totalPages` to know when to stop.
 - **The smart-turn adapter only handles two label keys** (`end_of_turn`

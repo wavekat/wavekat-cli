@@ -9,13 +9,14 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Args as ClapArgs, Subcommand};
+use futures_util::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::client::Client;
 use crate::commands::exports_smart_turn::{self, AdaptOptions};
-use crate::progress::with_spinner;
+use crate::progress::{with_spinner, ProgressBar};
 use crate::style;
 
 #[derive(Subcommand)]
@@ -130,6 +131,13 @@ pub struct DownloadArgs {
     /// exists. Default behaviour skips clips already present.
     #[arg(long)]
     force: bool,
+    /// Maximum number of clips to fetch in parallel. The platform side
+    /// streams each clip through a Cloudflare Worker, which scales
+    /// across isolates — so concurrency is a real win, but cranking it
+    /// past ~16 starts hitting Worker subrequest budgets without
+    /// meaningfully improving wall time. Default 8.
+    #[arg(long, default_value_t = 8)]
+    concurrency: usize,
 }
 
 #[derive(ClapArgs)]
@@ -489,9 +497,9 @@ async fn download(client: &Client, args: DownloadArgs) -> Result<()> {
         .with_context(|| format!("creating {}", clips_dir.display()))?;
 
     // Fetch the export row first so we 404 early on missing/forbidden ids
-    // before opening the manifest writer. We don't strictly need the row,
-    // but it gives us clip_count for progress and surfaces auth failures
-    // up front.
+    // before opening the manifest writer. Surfaces auth failures up
+    // front and confirms the export is in `ready` state before we touch
+    // disk.
     let row: ExportRow = client
         .get_json(&format!("/api/exports/{}", args.export_id))
         .await?;
@@ -513,18 +521,18 @@ async fn download(client: &Client, args: DownloadArgs) -> Result<()> {
         )
         .await?;
     eprintln!(
-        "{} manifest.jsonl ({} bytes)",
+        "{} manifest.jsonl ({})",
         style::dim("downloaded"),
-        bytes
+        human_bytes(bytes as i64),
     );
 
-    // Re-open the manifest as a line-stream and download each referenced
-    // clip. We deliberately don't parallelise — the platform side is a
-    // single Worker so concurrency would just buy throttling.
+    // Read the manifest into a Vec up front so we have a known total
+    // for the progress bar and a flat work-list to drive
+    // `buffer_unordered`. Manifests are line-oriented JSON, so this is
+    // cheap even for tens of thousands of clips.
     let manifest = fs::File::open(&manifest_path).await?;
     let mut lines = BufReader::new(manifest).lines();
-    let mut count: u64 = 0;
-    let mut skipped: u64 = 0;
+    let mut ids: Vec<String> = Vec::new();
     while let Some(line) = lines.next_line().await? {
         if line.trim().is_empty() {
             continue;
@@ -535,27 +543,57 @@ async fn download(client: &Client, args: DownloadArgs) -> Result<()> {
             .get("annotationId")
             .and_then(|x| x.as_str())
             .ok_or_else(|| anyhow!("manifest line missing annotationId: {line}"))?;
+        ids.push(ann_id.to_string());
+    }
+    let total = ids.len() as u64;
+
+    // Partition into already-on-disk vs. needs-fetch. Skipped clips
+    // tick the bar immediately so `--force=false` resumes look fast
+    // and the displayed progress matches the on-disk reality.
+    let mut skipped: u64 = 0;
+    let mut pending: Vec<String> = Vec::with_capacity(ids.len());
+    let bar = ProgressBar::new("downloading clips", total);
+    for ann_id in ids {
         let dest = clips_dir.join(format!("{ann_id}.wav"));
         if dest.exists() && !args.force {
             skipped += 1;
+            bar.inc();
             continue;
         }
-        let mut f = fs::File::create(&dest)
-            .await
-            .with_context(|| format!("creating {}", dest.display()))?;
-        client
-            .get_stream_to(
-                &format!("/api/exports/{}/clips/{ann_id}", args.export_id),
-                &mut f,
-            )
-            .await?;
-        count += 1;
-        if count.is_multiple_of(25) {
-            eprintln!("{} {count} clip(s)…", style::dim("downloaded"));
-        }
+        pending.push(ann_id);
     }
+
+    let concurrency = args.concurrency.max(1);
+    let export_id = args.export_id.as_str();
+    let mut downloads = stream::iter(pending.into_iter().map(|ann_id| {
+        let bar = &bar;
+        let clips_dir = &clips_dir;
+        async move {
+            let dest = clips_dir.join(format!("{ann_id}.wav"));
+            let mut f = fs::File::create(&dest)
+                .await
+                .with_context(|| format!("creating {}", dest.display()))?;
+            client
+                .get_stream_to(&format!("/api/exports/{export_id}/clips/{ann_id}"), &mut f)
+                .await?;
+            bar.inc();
+            Ok::<(), anyhow::Error>(())
+        }
+    }))
+    .buffer_unordered(concurrency);
+
+    while let Some(r) = downloads.next().await {
+        // Bail on first error. In-flight downloads in the buffer are
+        // dropped (and therefore aborted) when we leave this scope —
+        // partial files they left behind get retried on the next run.
+        r?;
+    }
+    drop(downloads);
+    bar.finish();
+
+    let downloaded = total - skipped;
     eprintln!(
-        "{} {count} clip(s){}",
+        "{} {downloaded} clip(s){}",
         style::bold("done:"),
         if skipped > 0 {
             format!(" ({skipped} already on disk, skipped)")
