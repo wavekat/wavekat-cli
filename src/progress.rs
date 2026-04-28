@@ -103,19 +103,19 @@ impl ProgressBar {
                 loop {
                     tick.tick().await;
                     let cur = s.current.load(Ordering::Relaxed);
-                    let secs = started.elapsed().as_secs();
+                    let elapsed = started.elapsed();
                     let frame = FRAMES[i % FRAMES.len()];
                     i = i.wrapping_add(1);
                     let bar = render_bar(cur, s.total, BAR_WIDTH);
+                    let eta = render_eta(cur, s.total, elapsed);
                     let mut err = std::io::stderr().lock();
                     let _ = write!(
                         err,
-                        "\r\x1b[2K{frame} {label}  [{bar}]  {cur}/{total} · {m}:{ss:02}",
+                        "\r\x1b[2K{frame} {label}  [{bar}]  {cur}/{total} · {time} · ETA {eta}",
                         label = s.label,
                         cur = cur,
                         total = s.total,
-                        m = secs / 60,
-                        ss = secs % 60,
+                        time = format_elapsed(elapsed),
                     );
                     let _ = err.flush();
                 }
@@ -169,6 +169,24 @@ pub fn format_elapsed(d: Duration) -> String {
     format!("{}:{:02}", secs / 60, secs % 60)
 }
 
+/// Linear-extrapolation ETA: assume the rate over the elapsed window
+/// holds for the remaining work. Returns `--:--` until we've done at
+/// least one unit (no rate yet) or know the total. Skipped clips that
+/// tick the bar instantly at t=0 will deflate the early estimate, but
+/// it self-corrects within a couple of seconds of real work.
+fn render_eta(cur: u64, total: u64, elapsed: Duration) -> String {
+    if cur == 0 || total == 0 || cur >= total {
+        return "--:--".to_string();
+    }
+    let remaining_secs =
+        elapsed.as_secs_f64() / cur as f64 * (total - cur) as f64;
+    if !remaining_secs.is_finite() || remaining_secs < 0.0 {
+        return "--:--".to_string();
+    }
+    let secs = remaining_secs.round() as u64;
+    format!("{}:{:02}", secs / 60, secs % 60)
+}
+
 fn render_bar(cur: u64, total: u64, width: usize) -> String {
     if total == 0 {
         return " ".repeat(width);
@@ -208,5 +226,27 @@ mod tests {
     fn bar_handles_zero_total() {
         let s = render_bar(0, 0, 8);
         assert_eq!(s.chars().count(), 8);
+    }
+
+    #[test]
+    fn eta_unknown_until_first_tick() {
+        assert_eq!(render_eta(0, 100, Duration::from_secs(5)), "--:--");
+    }
+
+    #[test]
+    fn eta_unknown_when_total_zero() {
+        assert_eq!(render_eta(0, 0, Duration::from_secs(5)), "--:--");
+    }
+
+    #[test]
+    fn eta_unknown_at_or_past_total() {
+        assert_eq!(render_eta(100, 100, Duration::from_secs(5)), "--:--");
+        assert_eq!(render_eta(101, 100, Duration::from_secs(5)), "--:--");
+    }
+
+    #[test]
+    fn eta_extrapolates_linearly() {
+        // 25 of 100 done in 10s → 30s remaining → 0:30.
+        assert_eq!(render_eta(25, 100, Duration::from_secs(10)), "0:30");
     }
 }
