@@ -82,17 +82,19 @@ pick_install_dir() {
 }
 
 verify_sha256() {
-  archive="$1"
-  expected="$2"
+  # POSIX sh has no `local`, so use distinct names to avoid clobbering
+  # the caller's $archive / $expected.
+  _vs_file="$1"
+  _vs_expected="$2"
   if command -v sha256sum >/dev/null 2>&1; then
-    actual=$(sha256sum "$archive" | awk '{print $1}')
+    _vs_actual=$(sha256sum "$_vs_file" | awk '{print $1}')
   elif command -v shasum >/dev/null 2>&1; then
-    actual=$(shasum -a 256 "$archive" | awk '{print $1}')
+    _vs_actual=$(shasum -a 256 "$_vs_file" | awk '{print $1}')
   else
     info "warning: no sha256 tool found, skipping checksum verification"
     return 0
   fi
-  [ "$actual" = "$expected" ] || err "checksum mismatch (expected $expected, got $actual)"
+  [ "$_vs_actual" = "$_vs_expected" ] || err "checksum mismatch (expected $_vs_expected, got $_vs_actual)"
 }
 
 main() {
@@ -102,15 +104,20 @@ main() {
   install_dir=$(pick_install_dir)
 
   archive="${BIN}-${tag}-${target}.tar.gz"
-  url="https://github.com/${REPO}/releases/download/${tag}/${archive}"
-  sha_url="${url}.sha256"
+  base="https://github.com/${REPO}/releases/download/${tag}"
+  url="${base}/${archive}"
+  # taiki-e/upload-rust-binary-action uploads the checksum as <bin>-<tag>-<target>.sha256
+  # (without the .tar.gz suffix), so build that name explicitly.
+  sha_url="${base}/${BIN}-${tag}-${target}.sha256"
 
   info "Installing wk $tag for $target"
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
 
   fetch "$url" "$tmp/$archive"
-  sha=$(fetch_stdout "$sha_url" | awk '{print $1}') || err "could not download checksum"
+  sha_text=$(fetch_stdout "$sha_url") || err "could not download checksum from $sha_url"
+  sha=$(printf '%s' "$sha_text" | awk '{print $1}')
+  [ -n "$sha" ] || err "checksum file at $sha_url was empty"
   verify_sha256 "$tmp/$archive" "$sha"
 
   tar -xzf "$tmp/$archive" -C "$tmp"
