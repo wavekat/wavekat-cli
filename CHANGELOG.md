@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/wavekat/wavekat-cli/compare/v0.0.3...v0.0.4) - 2026-04-28
+
+### Other
+
+- end-user README + fix release artifact pipeline ([#5](https://github.com/wavekat/wavekat-cli/pull/5))
+
 ## [0.0.3](https://github.com/wavekat/wavekat-cli/compare/v0.0.2...v0.0.3) - 2026-04-28
 
 ### Added
