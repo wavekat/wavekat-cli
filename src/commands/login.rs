@@ -30,6 +30,7 @@ use std::time::Duration;
 
 use crate::client::Client;
 use crate::config::{self, AuthConfig};
+use crate::style;
 
 const DEFAULT_BASE_URL: &str = "https://platform.wavekat.com";
 
@@ -91,8 +92,18 @@ pub async fn run(args: Args) -> Result<()> {
 
     config::save(&cfg)?;
     let path = config::auth_path()?;
-    println!("Signed in as {login} (role: {role}).");
-    println!("Credentials saved to {}", path.display());
+    println!(
+        "{} Signed in as {} ({} {}).",
+        style::green("✓"),
+        style::bold(login),
+        style::dim("role:"),
+        style::role(role),
+    );
+    println!(
+        "{} {}",
+        style::dim("Credentials saved to"),
+        style::dim(&path.display().to_string()),
+    );
     Ok(())
 }
 

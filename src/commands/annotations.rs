@@ -3,6 +3,7 @@ use clap::{Args as ClapArgs, Subcommand};
 use serde::{Deserialize, Serialize};
 
 use crate::client::Client;
+use crate::style;
 
 #[derive(Subcommand)]
 pub enum Cmd {
@@ -101,37 +102,45 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         return Ok(());
     }
     println!(
-        "{:<10}  {:<24}  {:<18}  {:<16}  REVIEW",
-        "ID", "FILE", "LABEL", "RANGE"
+        "{}  {}  {}  {}  {}",
+        style::bold(&format!("{:<10}", "ID")),
+        style::bold(&format!("{:<24}", "FILE")),
+        style::bold(&format!("{:<18}", "LABEL")),
+        style::bold(&format!("{:<16}", "RANGE")),
+        style::bold("REVIEW"),
     );
     for a in &resp.annotations {
         let id_short = a.id.get(..8).unwrap_or(&a.id);
-        let file = a.file_name.as_deref().unwrap_or("-");
-        let label = format!("{}={}", a.label_key, a.label_value);
+        let file = truncate(a.file_name.as_deref().unwrap_or("-"), 24);
+        let label_text = truncate(&format!("{}={}", a.label_key, a.label_value), 18);
         let range = format!("{:.1}–{:.1}s", a.start_sec, a.end_sec);
-        let review = a.review_status.as_deref().unwrap_or("—");
+        // Pad in raw bytes first, then style — ANSI codes don't count toward
+        // the visible width, so styling has to wrap an already-padded cell.
         println!(
-            "{:<10}  {:<24}  {:<18}  {:<16}  {}",
-            id_short,
-            truncate(file, 24),
-            truncate(&label, 18),
-            range,
-            review,
+            "{}  {file:<24}  {}  {}  {}",
+            style::dim(&format!("{id_short:<10}")),
+            style::cyan(&format!("{label_text:<18}")),
+            style::dim(&format!("{range:<16}")),
+            style::review(a.review_status.as_deref()),
         );
         if let Some(text) = a.asr_text.as_deref() {
             let trimmed = text.trim();
             if !trimmed.is_empty() {
-                println!("            {}", truncate(trimmed, 96));
+                println!("            {}", style::dim(&truncate(trimmed, 96)));
             }
         }
     }
     println!(
-        "\nPage {}/{} · {} annotation(s) total · pageSize {}",
-        resp.page, resp.total_pages, resp.total, resp.page_size
+        "\n{}",
+        style::dim(&format!(
+            "Page {}/{} · {} annotation(s) total · pageSize {}",
+            resp.page, resp.total_pages, resp.total, resp.page_size
+        )),
     );
     if resp.page < resp.total_pages {
         println!(
-            "Next: wk annotations list {} --page {}{}",
+            "{} wk annotations list {} --page {}{}",
+            style::dim("Next:"),
             args.project_id,
             resp.page + 1,
             if resp.page_size != 20 {

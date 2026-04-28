@@ -2,6 +2,7 @@ use anyhow::Result;
 
 use crate::client::Client;
 use crate::config;
+use crate::style;
 
 pub async fn run() -> Result<()> {
     // Best-effort server-side revoke before we forget the credentials
@@ -12,9 +13,9 @@ pub async fn run() -> Result<()> {
         let _ = client.post_empty("/api/auth/cli/tokens/revoke-current").await;
     }
     if config::clear()? {
-        println!("Signed out.");
+        println!("{} Signed out.", style::green("✓"));
     } else {
-        println!("Already signed out.");
+        println!("{}", style::dim("Already signed out."));
     }
     Ok(())
 }

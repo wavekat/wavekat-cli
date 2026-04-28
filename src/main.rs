@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 mod client;
 mod commands;
 mod config;
+mod style;
 
 #[derive(Parser)]
 #[command(
