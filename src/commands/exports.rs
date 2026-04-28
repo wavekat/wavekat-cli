@@ -451,8 +451,12 @@ async fn create(client: &Client, args: CreateArgs) -> Result<()> {
     // into R2 before responding), so this can take seconds-to-minutes.
     // Spinner is purely a liveness signal — there's no progress field
     // to render until the platform exposes one.
-    let resp: serde_json::Value =
-        with_spinner("Creating export…", client.post_json(&path, &body)).await?;
+    let (resp, elapsed) = with_spinner(
+        "Creating export…",
+        client.post_json::<serde_json::Value, _>(&path, &body),
+    )
+    .await;
+    let resp = resp?;
     if args.json {
         println!("{}", serde_json::to_string_pretty(&resp)?);
         return Ok(());
@@ -464,7 +468,12 @@ async fn create(client: &Client, args: CreateArgs) -> Result<()> {
         .and_then(|x| x.as_i64())
         .map(|n| n.to_string())
         .unwrap_or_else(|| "—".to_string());
-    println!("{} {}", style::bold("Created"), style::dim(id));
+    println!(
+        "{} {} {}",
+        style::bold("Created"),
+        style::dim(id),
+        style::dim(&format!("in {}", crate::progress::format_elapsed(elapsed))),
+    );
     println!("  status: {}  clips: {}", colour_status(status), clips);
     println!("  next:   {}", style::dim(&format!("wk exports show {id}")),);
     Ok(())
@@ -589,17 +598,18 @@ async fn download(client: &Client, args: DownloadArgs) -> Result<()> {
         r?;
     }
     drop(downloads);
-    bar.finish();
+    let elapsed = bar.finish();
 
     let downloaded = total - skipped;
     eprintln!(
-        "{} {downloaded} clip(s){}",
-        style::bold("done:"),
+        "{} {downloaded} clip(s){} {}",
+        style::dim("downloaded"),
         if skipped > 0 {
             format!(" ({skipped} already on disk, skipped)")
         } else {
             String::new()
-        }
+        },
+        style::dim(&format!("in {}", crate::progress::format_elapsed(elapsed))),
     );
     println!("{}", out_dir.display());
     Ok(())
