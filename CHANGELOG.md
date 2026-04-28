@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.14](https://github.com/wavekat/wavekat-cli/compare/v0.0.13...v0.0.14) - 2026-04-28
+
+### Added
+
+- *(exports)* progress bar for smart-turn adapt ([#28](https://github.com/wavekat/wavekat-cli/pull/28))
+
+### Fixed
+
+- *(exports)* drop internal docs link from smart-turn README ([#30](https://github.com/wavekat/wavekat-cli/pull/30))
+
 ## [0.0.13](https://github.com/wavekat/wavekat-cli/compare/v0.0.12...v0.0.13) - 2026-04-28
 
 ### Fixed
