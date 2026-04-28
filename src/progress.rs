@@ -5,13 +5,16 @@
 //
 // `with_spinner(label, fut)` races the work future against a 100 ms
 // ticker. On each tick we redraw the line on stderr; when the work
-// resolves we clear the line and return its value untouched.
+// resolves we replace the live line with a final `{label}  M:SS`
+// summary so the elapsed time stays visible after the spinner stops.
 //
 // `ProgressBar` is the same idea for known-total work: a background
 // task ticks at 100 ms and redraws `[████░░] cur/total · M:SS`, while
 // callers `inc()` from any task as units complete. The atomic counter
 // keeps the bar safe under `buffer_unordered` concurrency without a
-// mutex.
+// mutex. On finish the bar is redrawn one last time without the
+// spinner frame and committed with a newline, again so the user can
+// still read the total elapsed time afterwards.
 //
 // Both are disabled automatically when stderr isn't a TTY or
 // `NO_COLOR` is set, so piping stays clean.
@@ -21,6 +24,8 @@ use std::io::{IsTerminal, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use crate::style;
 
 const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const BAR_WIDTH: usize = 20;
@@ -47,8 +52,13 @@ where
     loop {
         tokio::select! {
             v = &mut fut => {
+                let secs = started.elapsed().as_secs();
                 let mut err = std::io::stderr().lock();
-                let _ = write!(err, "\r\x1b[2K");
+                let _ = write!(
+                    err,
+                    "\r\x1b[2K{label}  {}\n",
+                    style::dim(&format!("{}:{:02}", secs / 60, secs % 60)),
+                );
                 let _ = err.flush();
                 return v;
             }
@@ -79,6 +89,7 @@ struct ProgressState {
     label: String,
     total: u64,
     current: AtomicU64,
+    started: Instant,
 }
 
 impl ProgressBar {
@@ -88,11 +99,12 @@ impl ProgressBar {
             label: label.into(),
             total,
             current: AtomicU64::new(0),
+            started: Instant::now(),
         });
         let task = if enabled {
             let s = state.clone();
             Some(tokio::spawn(async move {
-                let started = Instant::now();
+                let started = s.started;
                 let mut tick = tokio::time::interval(Duration::from_millis(100));
                 tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                 let mut i: usize = 0;
@@ -139,8 +151,21 @@ impl ProgressBar {
             t.abort();
         }
         if self.enabled {
+            // Flip enabled off so the Drop impl that runs after
+            // `finish()` doesn't print a duplicate final line.
+            self.enabled = false;
+            let cur = self.state.current.load(Ordering::Relaxed);
+            let secs = self.state.started.elapsed().as_secs();
+            let bar = render_bar(cur, self.state.total, BAR_WIDTH);
             let mut err = std::io::stderr().lock();
-            let _ = write!(err, "\r\x1b[2K");
+            let _ = write!(
+                err,
+                "\r\x1b[2K{label}  [{bar}]  {cur}/{total} · {time}\n",
+                label = self.state.label,
+                cur = cur,
+                total = self.state.total,
+                time = style::dim(&format!("{}:{:02}", secs / 60, secs % 60)),
+            );
             let _ = err.flush();
         }
     }
