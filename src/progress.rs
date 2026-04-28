@@ -12,9 +12,9 @@
 // task ticks at 100 ms and redraws `[████░░] cur/total · M:SS`, while
 // callers `inc()` from any task as units complete. The atomic counter
 // keeps the bar safe under `buffer_unordered` concurrency without a
-// mutex. On finish the bar is redrawn one last time without the
-// spinner frame and committed with a newline, again so the user can
-// still read the total elapsed time afterwards.
+// mutex. On finish the live bar is replaced with a one-line
+// `{label}  M:SS` summary — the bar itself is dropped (a full bar is
+// noise once the work is done) but the elapsed time stays readable.
 //
 // Both are disabled automatically when stderr isn't a TTY or
 // `NO_COLOR` is set, so piping stays clean.
@@ -154,16 +154,15 @@ impl ProgressBar {
             // Flip enabled off so the Drop impl that runs after
             // `finish()` doesn't print a duplicate final line.
             self.enabled = false;
-            let cur = self.state.current.load(Ordering::Relaxed);
+            // Drop the bar on finish — a full bar is just visual noise
+            // once the work is done. Keep the label and elapsed time so
+            // the user can still read how long it took.
             let secs = self.state.started.elapsed().as_secs();
-            let bar = render_bar(cur, self.state.total, BAR_WIDTH);
             let mut err = std::io::stderr().lock();
             let _ = write!(
                 err,
-                "\r\x1b[2K{label}  [{bar}]  {cur}/{total} · {time}\n",
+                "\r\x1b[2K{label}  {time}\n",
                 label = self.state.label,
-                cur = cur,
-                total = self.state.total,
                 time = style::dim(&format!("{}:{:02}", secs / 60, secs % 60)),
             );
             let _ = err.flush();
