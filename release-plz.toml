@@ -1,3 +1,10 @@
 [workspace]
 git_tag_enable = true
 git_release_enable = true
+# Create the GitHub release as a draft. Binaries are uploaded into the
+# draft by `.github/workflows/release.yml`, which then promotes it via
+# `gh release edit --draft=false`. Atomicity matters because
+# /releases/latest moves to the new tag the instant the release is
+# non-draft, and install.sh would 404 on the binary tarballs while the
+# build matrix is still running otherwise.
+git_release_draft = true
