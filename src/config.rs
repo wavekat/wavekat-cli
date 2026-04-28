@@ -3,10 +3,20 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+/// Persisted credentials. The CLI now authenticates with a bearer token
+/// minted via the loopback OAuth flow (see `commands::login`); the older
+/// `session_cookie` field is still read so existing installs keep working
+/// until the next `wk login`.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AuthConfig {
     pub base_url: String,
-    pub session_cookie: String,
+    /// `wkcli_…` bearer token issued by `POST /api/auth/cli/tokens`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    /// Legacy: raw value of the `wk_session` cookie. Read for back-compat,
+    /// not written by new logins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_cookie: Option<String>,
 }
 
 fn config_dir() -> Result<PathBuf> {

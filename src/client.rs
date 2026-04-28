@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use reqwest::header::{HeaderMap, HeaderValue, COOKIE};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, COOKIE};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -18,11 +18,26 @@ impl Client {
 
     pub fn new(cfg: &AuthConfig) -> Result<Self> {
         let mut headers = HeaderMap::new();
-        let cookie = format!("wk_session={}", cfg.session_cookie);
-        headers.insert(
-            COOKIE,
-            HeaderValue::from_str(&cookie).context("session cookie contained invalid bytes")?,
-        );
+        // Prefer the bearer token (new flow). Fall back to the legacy
+        // session cookie so existing auth.json files keep working until
+        // the user re-runs `wk login`.
+        if let Some(token) = cfg.token.as_deref() {
+            let value = format!("Bearer {token}");
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&value).context("token contained invalid bytes")?,
+            );
+        } else if let Some(cookie) = cfg.session_cookie.as_deref() {
+            let value = format!("wk_session={cookie}");
+            headers.insert(
+                COOKIE,
+                HeaderValue::from_str(&value).context("session cookie contained invalid bytes")?,
+            );
+        } else {
+            return Err(anyhow!(
+                "no credentials in config — run `wk login` to authenticate"
+            ));
+        }
         let inner = reqwest::Client::builder()
             .default_headers(headers)
             .user_agent(concat!("wavekat-cli/", env!("CARGO_PKG_VERSION")))
@@ -46,6 +61,27 @@ impl Client {
             .await
             .with_context(|| format!("GET {url}"))?;
         decode(url, resp).await
+    }
+
+    pub async fn post_empty(&self, path: &str) -> Result<()> {
+        let url = self.url(path);
+        let resp = self
+            .inner
+            .post(&url)
+            .send()
+            .await
+            .with_context(|| format!("POST {url}"))?;
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            let snippet = if text.len() > 500 {
+                &text[..500]
+            } else {
+                &text
+            };
+            return Err(anyhow!("{} {}: {}", status.as_u16(), url, snippet));
+        }
+        Ok(())
     }
 
     pub async fn get_json_query<T: DeserializeOwned, Q: Serialize + ?Sized>(

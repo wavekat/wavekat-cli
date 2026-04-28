@@ -4,11 +4,25 @@ use clap::{Parser, Subcommand};
 mod client;
 mod commands;
 mod config;
+mod style;
+
+// Both `-V` and `--version` print the same string — that matches what
+// `rustc -V` / `cargo -V` actually do, despite clap's default of
+// splitting them. clap prepends the bin name ("wk ") for us.
+const VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    "\n",
+    env!("CARGO_PKG_NAME"),
+    " — ",
+    env!("CARGO_PKG_DESCRIPTION"),
+    "\n",
+    env!("CARGO_PKG_REPOSITORY"),
+);
 
 #[derive(Parser)]
 #[command(
     name = "wk",
-    version,
+    version = VERSION,
     about = "Command-line client for the WaveKat platform",
     long_about = "Command-line client for the WaveKat platform.\n\nRun `wk login` to authenticate. \
                   Credentials are stored under your platform config dir (e.g. ~/.config/wavekat/auth.json on Linux/macOS)."
