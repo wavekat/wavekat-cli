@@ -1,7 +1,9 @@
 use anyhow::{anyhow, Context, Result};
+use futures_util::StreamExt;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, COOKIE};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use tokio::io::AsyncWriteExt;
 
 use crate::config::{self, AuthConfig};
 
@@ -99,18 +101,93 @@ impl Client {
             .with_context(|| format!("GET {url}"))?;
         decode(url, resp).await
     }
+
+    pub async fn post_json<T: DeserializeOwned, B: Serialize + ?Sized>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T> {
+        let url = self.url(path);
+        let resp = self
+            .inner
+            .post(&url)
+            .json(body)
+            .send()
+            .await
+            .with_context(|| format!("POST {url}"))?;
+        decode(url, resp).await
+    }
+
+    pub async fn delete(&self, path: &str) -> Result<()> {
+        let url = self.url(path);
+        let resp = self
+            .inner
+            .delete(&url)
+            .send()
+            .await
+            .with_context(|| format!("DELETE {url}"))?;
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!(
+                "{} {}: {}",
+                status.as_u16(),
+                url,
+                truncate(&text, 500)
+            ));
+        }
+        Ok(())
+    }
+
+    /// Stream a GET response body to a writer. Returns the number of bytes
+    /// written. Used for manifest + clip downloads where the payload is too
+    /// big to comfortably hold in memory.
+    pub async fn get_stream_to<W: AsyncWriteExt + Unpin>(
+        &self,
+        path: &str,
+        sink: &mut W,
+    ) -> Result<u64> {
+        let url = self.url(path);
+        let resp = self
+            .inner
+            .get(&url)
+            .send()
+            .await
+            .with_context(|| format!("GET {url}"))?;
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!(
+                "{} {}: {}",
+                status.as_u16(),
+                url,
+                truncate(&text, 500)
+            ));
+        }
+        let mut stream = resp.bytes_stream();
+        let mut written: u64 = 0;
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk.with_context(|| format!("reading body of {url}"))?;
+            sink.write_all(&bytes)
+                .await
+                .with_context(|| format!("writing chunk from {url}"))?;
+            written += bytes.len() as u64;
+        }
+        sink.flush().await?;
+        Ok(written)
+    }
 }
 
 async fn decode<T: DeserializeOwned>(url: String, resp: reqwest::Response) -> Result<T> {
     let status = resp.status();
     let text = resp.text().await?;
     if !status.is_success() {
-        let snippet = if text.len() > 500 {
-            &text[..500]
-        } else {
-            &text[..]
-        };
-        return Err(anyhow!("{} {}: {}", status.as_u16(), url, snippet));
+        return Err(anyhow!(
+            "{} {}: {}",
+            status.as_u16(),
+            url,
+            truncate(&text, 500)
+        ));
     }
     serde_json::from_str(&text)
         .with_context(|| format!("decoding response from {url}: {}", truncate(&text, 500)))
