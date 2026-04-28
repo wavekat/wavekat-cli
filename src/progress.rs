@@ -178,8 +178,7 @@ fn render_eta(cur: u64, total: u64, elapsed: Duration) -> String {
     if cur == 0 || total == 0 || cur >= total {
         return "--:--".to_string();
     }
-    let remaining_secs =
-        elapsed.as_secs_f64() / cur as f64 * (total - cur) as f64;
+    let remaining_secs = elapsed.as_secs_f64() / cur as f64 * (total - cur) as f64;
     if !remaining_secs.is_finite() || remaining_secs < 0.0 {
         return "--:--".to_string();
     }
