@@ -50,7 +50,10 @@ pub async fn run(args: Args) -> Result<()> {
 async fn run_check(pin: Option<&str>) -> Result<()> {
     let target = match pin {
         Some(v) => v.trim_start_matches('v').to_string(),
-        None => resolve_latest_tag().await?.trim_start_matches('v').to_string(),
+        None => resolve_latest_tag()
+            .await?
+            .trim_start_matches('v')
+            .to_string(),
     };
     if target == CURRENT {
         println!("{} wk {CURRENT} is the latest.", style::green("✓"));
