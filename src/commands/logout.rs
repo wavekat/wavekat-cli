@@ -10,7 +10,9 @@ pub async fn run() -> Result<()> {
     // the user clearly wants to be signed out, and they can revoke from
     // the web UI later.
     if let Ok(client) = Client::from_config() {
-        let _ = client.post_empty("/api/auth/cli/tokens/revoke-current").await;
+        let _ = client
+            .post_empty("/api/auth/cli/tokens/revoke-current")
+            .await;
     }
     if config::clear()? {
         println!("{} Signed out.", style::green("✓"));

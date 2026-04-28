@@ -127,12 +127,7 @@ async fn show(client: &Client, args: ShowArgs) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
-    let s = |k: &str| {
-        v.get(k)
-            .and_then(|x| x.as_str())
-            .unwrap_or("-")
-            .to_string()
-    };
+    let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("-").to_string();
     let label = |s: &str| style::dim(&format!("{s:<13}"));
     println!("{} {}", label("id:"), style::dim(&s("id")));
     println!("{} {}", label("name:"), style::bold(&s("name")));

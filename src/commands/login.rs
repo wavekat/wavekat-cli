@@ -165,12 +165,8 @@ fn browser_handshake(base_url: &str, no_browser: bool) -> Result<String> {
 }
 
 fn handle_callback(mut stream: TcpStream, expected_state: &str) -> Result<Option<String>> {
-    stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .ok();
-    stream
-        .set_write_timeout(Some(Duration::from_secs(5)))
-        .ok();
+    stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
+    stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
 
     // Read just the request line + headers. Cap at 8 KiB — the URL we care
     // about is well under that and we never need the body.
@@ -286,8 +282,7 @@ fn random_state() -> String {
 }
 
 fn base64url(bytes: &[u8]) -> String {
-    const ALPHA: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const ALPHA: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut out = String::with_capacity((bytes.len() * 4).div_ceil(3));
     let mut i = 0;
     while i + 3 <= bytes.len() {

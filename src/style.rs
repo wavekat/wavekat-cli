@@ -29,13 +29,27 @@ fn wrap(code: &str, body: &str) -> String {
     }
 }
 
-pub fn bold(s: &str) -> String { wrap("1", s) }
-pub fn dim(s: &str) -> String { wrap("2", s) }
-pub fn red(s: &str) -> String { wrap("31", s) }
-pub fn green(s: &str) -> String { wrap("32", s) }
-pub fn yellow(s: &str) -> String { wrap("33", s) }
-pub fn cyan(s: &str) -> String { wrap("36", s) }
-pub fn magenta(s: &str) -> String { wrap("35", s) }
+pub fn bold(s: &str) -> String {
+    wrap("1", s)
+}
+pub fn dim(s: &str) -> String {
+    wrap("2", s)
+}
+pub fn red(s: &str) -> String {
+    wrap("31", s)
+}
+pub fn green(s: &str) -> String {
+    wrap("32", s)
+}
+pub fn yellow(s: &str) -> String {
+    wrap("33", s)
+}
+pub fn cyan(s: &str) -> String {
+    wrap("36", s)
+}
+pub fn magenta(s: &str) -> String {
+    wrap("35", s)
+}
 
 /// Colour a review status string. Unknown / unreviewed render dim.
 pub fn review(status: Option<&str>) -> String {

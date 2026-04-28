@@ -74,7 +74,11 @@ impl Client {
         let status = resp.status();
         if !status.is_success() {
             let text = resp.text().await.unwrap_or_default();
-            let snippet = if text.len() > 500 { &text[..500] } else { &text };
+            let snippet = if text.len() > 500 {
+                &text[..500]
+            } else {
+                &text
+            };
             return Err(anyhow!("{} {}: {}", status.as_u16(), url, snippet));
         }
         Ok(())
