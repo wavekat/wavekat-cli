@@ -54,7 +54,11 @@ jobs:
 
   installer:
     name: Upload install.sh
-    needs: build
+    # Intentionally not `needs: build` — install.sh has no build artefacts
+    # to wait on, and serialising the upload after the matrix widens the
+    # window where the release exists but install.sh isn't on it yet.
+    # (The canonical entry point now lives at raw.githubusercontent.com,
+    # but we keep uploading per-release for users who pin to a tag.)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

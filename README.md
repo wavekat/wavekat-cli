@@ -13,7 +13,7 @@ terminal.
 ## Quick start
 
 ```sh
-curl -fsSL https://github.com/wavekat/wavekat-cli/releases/latest/download/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/wavekat/wavekat-cli/main/install.sh | sh
 wk login
 wk projects list
 ```
@@ -50,7 +50,7 @@ Supported on macOS (Apple Silicon + Intel) and Linux (x86_64 + aarch64).
 ### curl | sh (recommended)
 
 ```sh
-curl -fsSL https://github.com/wavekat/wavekat-cli/releases/latest/download/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/wavekat/wavekat-cli/main/install.sh | sh
 ```
 
 Pin a specific version with `WK_VERSION=vX.Y.Z` or pick the install directory

@@ -26,8 +26,12 @@ use crate::style;
 
 const REPO: &str = "wavekat/wavekat-cli";
 const CURRENT: &str = env!("CARGO_PKG_VERSION");
+// Served from `main` rather than the latest release's assets to dodge
+// the upload race: when release-plz publishes a new release, the
+// release-artifacts workflow uploads install.sh as an asset, but until
+// that finishes /releases/latest/download/install.sh returns 404.
 const INSTALL_SH_URL: &str =
-    "https://github.com/wavekat/wavekat-cli/releases/latest/download/install.sh";
+    "https://raw.githubusercontent.com/wavekat/wavekat-cli/main/install.sh";
 
 #[derive(ClapArgs)]
 pub struct Args {
