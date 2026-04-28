@@ -32,6 +32,17 @@ pub enum Cmd {
     /// Download an export's manifest + clips into a local directory
     Download(DownloadArgs),
     /// Convert a downloaded export into another format
+    #[command(long_about = "Convert a downloaded export into a trainer-ready format.\n\n\
+        Runs locally — reads the `manifest.jsonl` + `clips/` directory produced by \
+        `wk exports download` and writes a new directory in the chosen target format. \
+        No network calls.\n\n\
+        Available formats:\n  \
+          smart-turn  HuggingFace `datasets`-loadable Parquet shards for Pipecat \
+        smart-turn (binary end-of-turn / continuation task).\n\n\
+        Example:\n  \
+          wk exports download <export-id> --out ./my-export\n  \
+          wk exports adapt smart-turn --export-dir ./my-export --out ./my-dataset --language zh\n\n\
+        Run `wk exports adapt <format> --help` for format-specific flags.")]
     Adapt {
         #[command(subcommand)]
         command: AdaptCmd,
@@ -42,6 +53,21 @@ pub enum Cmd {
 pub enum AdaptCmd {
     /// Emit a HuggingFace `datasets`-loadable Parquet shard set for
     /// Pipecat smart-turn (binary endpoint task).
+    #[command(long_about = "Emit a HuggingFace `datasets`-loadable Parquet shard set for \
+        Pipecat smart-turn (binary end-of-turn / continuation task).\n\n\
+        Inputs: pass either `--export-dir <dir>` (expects `manifest.jsonl` + `clips/` \
+        inside, the layout `wk exports download` produces) or both `--manifest` and \
+        `--clips-dir` if your layout differs.\n\n\
+        Output: writes `train.parquet` (and `validation.parquet` / `test.parquet` if \
+        the manifest contains those splits) into `--out`, plus a `README.md` and a \
+        `wavekat_export_meta.json` provenance file. Audio is embedded as the HF \
+        `Audio` feature (struct of `bytes` + `path`); decode in Python with \
+        `cast_column(\"audio\", Audio(sampling_rate=16000))`.\n\n\
+        Label mapping is binary: `end_of_turn` → 1, `continuation` → 0. Any other \
+        `label_key` aborts rather than silently collapse a richer label set — pick a \
+        different export filter if you hit that.\n\n\
+        Example:\n  \
+          wk exports adapt smart-turn --export-dir ./my-export --out ./my-dataset --language zh")]
     SmartTurn(AdaptSmartTurnArgs),
 }
 
