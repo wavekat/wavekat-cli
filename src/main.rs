@@ -50,6 +50,11 @@ enum Command {
         #[command(subcommand)]
         command: commands::annotations::Cmd,
     },
+    /// Manage dataset exports
+    Exports {
+        #[command(subcommand)]
+        command: commands::exports::Cmd,
+    },
 }
 
 #[tokio::main]
@@ -61,5 +66,6 @@ async fn main() -> Result<()> {
         Command::Me => commands::me::run().await,
         Command::Projects { command } => commands::projects::run(command).await,
         Command::Annotations { command } => commands::annotations::run(command).await,
+        Command::Exports { command } => commands::exports::run(command).await,
     }
 }
