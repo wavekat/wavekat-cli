@@ -31,21 +31,32 @@ line when more pages exist. Filters on annotations: `--label`,
 
 ## Install
 
+### curl | sh
+
+```sh
+curl -fsSL https://github.com/wavekat/wavekat-cli/releases/latest/download/install.sh | sh
+```
+
+Pin a specific version with `WK_VERSION=v0.0.3` or pick the install directory
+with `WK_INSTALL_DIR=$HOME/bin`. Defaults to `/usr/local/bin` if writable, else
+`$HOME/.local/bin`. Supports macOS (Apple Silicon + Intel) and Linux (x86_64 +
+aarch64, statically linked against musl).
+
+### Prebuilt binaries
+
+Each [release](https://github.com/wavekat/wavekat-cli/releases) attaches
+tarballs and `.sha256` checksums for the four supported targets — drop the
+`wk` binary anywhere on your `PATH`.
+
 ### From source
 
 ```sh
-git clone https://github.com/wavekat/wavekat-cli
-cd wavekat-cli
+cargo install --git https://github.com/wavekat/wavekat-cli wavekat-cli
+# or, from a clone:
+git clone https://github.com/wavekat/wavekat-cli && cd wavekat-cli
 cargo install --path .
-# `wk` is now on your PATH
 wk --version
 ```
-
-### Homebrew / curl-pipe-shell
-
-Not yet — these will land once the first tagged release is cut. Releases will
-ship prebuilt binaries for macOS (Apple Silicon + Intel) and Linux (x86_64 +
-aarch64).
 
 ## Sign in
 
