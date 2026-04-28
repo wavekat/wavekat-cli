@@ -74,8 +74,12 @@ struct ManifestRow {
     source_file_id: String,
     source_file_sha256: String,
     labeller_id: i64,
+    // Nullable in the manifest — annotations created before the review
+    // workflow shipped, or rows captured pre-review, serialise as null.
+    // We don't use the field, so just tolerate either shape.
     #[allow(dead_code)]
-    review_status: String,
+    #[serde(default)]
+    review_status: Option<String>,
     split: String,
 }
 
@@ -384,7 +388,7 @@ mod tests {
             source_file_id: String::new(),
             source_file_sha256: String::new(),
             labeller_id: 0,
-            review_status: "approved".into(),
+            review_status: Some("approved".into()),
             split: "train".into(),
         };
         let p = resolve_clip_path(&row, std::path::Path::new("/tmp/c"));
@@ -467,6 +471,30 @@ mod tests {
         // README + provenance JSON must land alongside the shards.
         assert!(out.join("README.md").exists());
         assert!(out.join("wavekat_export_meta.json").exists());
+    }
+
+    /// Manifests produced before the review workflow shipped serialise
+    /// `reviewStatus` as null. We don't use the field, but the
+    /// deserializer must accept it instead of failing the whole adapt.
+    #[tokio::test]
+    async fn tolerates_null_review_status() {
+        let tmp = tempdir();
+        let export_dir = tmp.path().join("export");
+        let clips_dir = export_dir.join("clips");
+        std::fs::create_dir_all(&clips_dir).unwrap();
+        std::fs::write(clips_dir.join("a1.wav"), b"RIFFfakewavbytes").unwrap();
+        let line = r#"{"annotationId":"a1","clipPath":"clips/a1.wav","clipSha256":"s","clipDurationSec":1.0,"clipSampleRate":16000,"labelKey":"end_of_turn","labelValue":1,"startSec":0.0,"endSec":1.0,"padSec":0.0,"sourceFileId":"f","sourceFileSha256":"s","labellerId":1,"reviewStatus":null,"split":"train"}"#;
+        std::fs::write(export_dir.join("manifest.jsonl"), format!("{line}\n")).unwrap();
+
+        let outcome = run(AdaptOptions {
+            manifest_path: export_dir.join("manifest.jsonl"),
+            clips_dir,
+            out_dir: tmp.path().join("out"),
+            language: "zh".into(),
+        })
+        .await
+        .expect("adapter run");
+        assert_eq!(outcome.total, 1);
     }
 
     #[tokio::test]
