@@ -30,6 +30,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use arrow_array::builder::{
@@ -42,6 +43,8 @@ use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
+
+use crate::progress::ProgressBar;
 
 const KNOWN_SPLITS: &[&str] = &["train", "validation", "test"];
 
@@ -57,6 +60,7 @@ pub struct AdaptOptions {
 pub struct AdaptOutcome {
     pub split_counts: BTreeMap<String, usize>,
     pub total: usize,
+    pub elapsed: Duration,
 }
 
 #[derive(Deserialize, Clone)]
@@ -162,6 +166,7 @@ fn build_record_batch(
     clips_dir: &std::path::Path,
     language: &str,
     schema: Arc<Schema>,
+    progress: Option<&ProgressBar>,
 ) -> Result<RecordBatch> {
     let mut annotation_id = StringBuilder::new();
     let mut audio_bytes = BinaryBuilder::new();
@@ -190,6 +195,9 @@ fn build_record_batch(
         source_file_sha256.append_value(&row.source_file_sha256);
         labeller_id.append_value(row.labeller_id);
         clip_duration_sec.append_value(row.clip_duration_sec);
+        if let Some(bar) = progress {
+            bar.inc();
+        }
     }
 
     // Assemble the audio struct from its two child arrays. `Field`
@@ -313,14 +321,24 @@ pub async fn run(opts: AdaptOptions) -> Result<AdaptOutcome> {
     let schema = build_schema();
     let mut split_counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut total = 0usize;
+    // Span one bar across all splits — reading clips dominates wall
+    // time, and the user mostly wants to know "how much of my data
+    // is left", not which split we're inside.
+    let bar = ProgressBar::new("packing clips", rows.len() as u64);
     for (split_name, split_rows) in &by_split {
-        let batch =
-            build_record_batch(split_rows, &opts.clips_dir, &opts.language, schema.clone())?;
+        let batch = build_record_batch(
+            split_rows,
+            &opts.clips_dir,
+            &opts.language,
+            schema.clone(),
+            Some(&bar),
+        )?;
         let out_path = opts.out_dir.join(format!("{split_name}.parquet"));
         write_parquet(out_path, &batch, schema.clone())?;
         split_counts.insert(split_name.clone(), split_rows.len());
         total += split_rows.len();
     }
+    let elapsed = bar.finish();
 
     // Drop README + provenance file alongside the parquet shards. The
     // provenance JSON is the bit a future debugger will be glad to find:
@@ -345,6 +363,7 @@ pub async fn run(opts: AdaptOptions) -> Result<AdaptOutcome> {
     Ok(AdaptOutcome {
         split_counts,
         total,
+        elapsed,
     })
 }
 
