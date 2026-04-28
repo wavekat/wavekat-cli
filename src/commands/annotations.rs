@@ -126,7 +126,7 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         if let Some(text) = a.asr_text.as_deref() {
             let trimmed = text.trim();
             if !trimmed.is_empty() {
-                println!("            {}", style::dim(&truncate(trimmed, 96)));
+                println!("            {}", style::dim(&truncate_width(trimmed, 80)));
             }
         }
     }
@@ -161,4 +161,32 @@ fn truncate(s: &str, n: usize) -> String {
     } else {
         s.to_string()
     }
+}
+
+/// Truncate by *visible* terminal width (CJK chars count as 2). Stops as
+/// soon as appending the next char would push us over `cols - 1`, leaving
+/// room for the trailing ellipsis. Falls back to no-op when the input
+/// already fits.
+fn truncate_width(s: &str, cols: usize) -> String {
+    use unicode_width::UnicodeWidthChar;
+    let mut total = 0usize;
+    for c in s.chars() {
+        total += c.width().unwrap_or(0);
+        if total > cols {
+            let budget = cols.saturating_sub(1);
+            let mut used = 0usize;
+            let mut out = String::new();
+            for c in s.chars() {
+                let w = c.width().unwrap_or(0);
+                if used + w > budget {
+                    break;
+                }
+                out.push(c);
+                used += w;
+            }
+            out.push('…');
+            return out;
+        }
+    }
+    s.to_string()
 }
