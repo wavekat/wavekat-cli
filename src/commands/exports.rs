@@ -272,16 +272,19 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         println!("No exports.");
         return Ok(());
     }
+    // Print the full UUID — exports IDs are arguments to the next command in
+    // the pipeline (`wk exports download <id>` / `… show <id>`), so the user
+    // needs to copy-paste them. Truncating to 8 chars (as we do for
+    // annotations, where the id is just a row marker) defeats that.
     println!(
         "{}  {}  {}  {}  {}",
-        style::bold(&format!("{:<10}", "ID")),
+        style::bold(&format!("{:<38}", "ID")),
         style::bold(&format!("{:<32}", "NAME")),
         style::bold(&format!("{:<10}", "STATUS")),
         style::bold(&format!("{:<8}", "CLIPS")),
         style::bold("CREATED"),
     );
     for e in &resp.exports {
-        let id_short = e.id.get(..8).unwrap_or(&e.id);
         let name = truncate(&e.name, 32);
         let clips = e
             .clip_count
@@ -289,13 +292,17 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
             .unwrap_or_else(|| "—".to_string());
         println!(
             "{}  {name:<32}  {}  {}  {}",
-            style::dim(&format!("{id_short:<10}")),
+            style::dim(&format!("{:<38}", e.id)),
             style::bold(&format!("{:<10}", colour_status_text(&e.status))),
             style::dim(&format!("{clips:<8}")),
             style::dim(&e.created_at),
         );
         if let Some(err) = e.error_message.as_deref() {
-            println!("            {}", style::red(&format!("error: {err}")));
+            println!(
+                "{}  {}",
+                style::dim(&format!("{:<38}", "")),
+                style::red(&format!("error: {err}")),
+            );
         }
     }
     println!(
