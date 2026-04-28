@@ -1,12 +1,7 @@
 #!/bin/sh
 # WaveKat CLI installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/wavekat/wavekat-cli/main/install.sh | sh
-#
-# Served from `main` rather than the latest release's assets so the
-# entry point is always available — uploading install.sh as a release
-# asset races the rest of the release-artifact build, leaving a window
-# where /releases/latest/download/install.sh 404s.
+#   curl -fsSL https://github.com/wavekat/wavekat-cli/releases/latest/download/install.sh | sh
 #
 # Environment overrides:
 #   WK_VERSION     pin a specific tag (e.g. v0.0.3); default: latest release

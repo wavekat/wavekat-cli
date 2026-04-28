@@ -1,8 +1,11 @@
 name: Release artifacts
 
+# Triggered by release-plz-release.yml after release-plz creates a
+# *draft* release for a new tag. We build the binaries into the draft,
+# upload install.sh, then promote `--draft=false` so the release goes
+# live atomically — /releases/latest never points at a tag whose
+# binaries are still building.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -31,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          ref: ${{ inputs.tag }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -49,24 +52,38 @@ jobs:
           archive: $bin-$tag-$target
           tar: unix
           checksum: sha256
-          ref: refs/tags/${{ github.event.release.tag_name || inputs.tag }}
+          ref: refs/tags/${{ inputs.tag }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
   installer:
     name: Upload install.sh
     # Intentionally not `needs: build` — install.sh has no build artefacts
-    # to wait on, and serialising the upload after the matrix widens the
-    # window where the release exists but install.sh isn't on it yet.
-    # (The canonical entry point now lives at raw.githubusercontent.com,
-    # but we keep uploading per-release for users who pin to a tag.)
+    # to wait on, so it uploads in parallel with the matrix.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          ref: ${{ inputs.tag }}
       - name: Upload install.sh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${{ github.event.release.tag_name || inputs.tag }}"
+          tag="${{ inputs.tag }}"
           gh release upload "$tag" install.sh --clobber
+
+  publish:
+    name: Promote draft → published
+    needs: [build, installer]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag }}"
+          # --latest pins this as the "latest" release explicitly so
+          # GitHub's auto-detection doesn't pick a different non-draft
+          # release in the rare case where releases land out of order.
+          gh release edit "$tag" --draft=false --latest --repo "$REPO"

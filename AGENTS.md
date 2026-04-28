@@ -14,7 +14,7 @@ wk agents
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/wavekat/wavekat-cli/main/install.sh | sh
+curl -fsSL https://github.com/wavekat/wavekat-cli/releases/latest/download/install.sh | sh
 ```
 
 Verify:
