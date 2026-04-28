@@ -20,8 +20,8 @@ Command-line client (`wk`) for the [WaveKat platform](https://platform.wavekat.c
 | `wk logout`              | `POST /api/auth/cli/tokens/revoke-current` | revokes the token server-side and removes the local file |
 | `wk me`                  | `GET /api/me` | your login, id, name, email, role |
 | `wk projects list`       | `GET /api/projects` | paginated table of projects you can see |
-| `wk projects show <id>`  | `GET /api/projects/{id}` | project detail (raw JSON) |
-| `wk annotations list <project-id>` | `GET /api/projects/{id}/annotations` | paginated annotations (raw JSON) |
+| `wk projects show <id>`  | `GET /api/projects/{id}` | project summary (`--json` for raw) |
+| `wk annotations list <project-id>` | `GET /api/projects/{id}/annotations` | paginated table (`--json` for raw, `--asr` to inline ASR) |
 
 Pagination on every list (`--page`, `--page-size`). Filters on annotations:
 `--label`, `--review-status`, `--file-id`, `--created-by`. Run any command
@@ -111,7 +111,11 @@ wk projects list --page-size 5
 
 wk projects list --json | jq '.projects[].name'
 
-wk annotations list <project-id> --label end_of_turn --review-status approved \
+# Default: human-readable table. Add `--asr` for the ASR snippet under each row.
+wk annotations list <project-id> --label end_of_turn --review-status approved
+
+# Pipe raw JSON into jq for scripting.
+wk annotations list <project-id> --label end_of_turn --review-status approved --json \
   | jq '.annotations | length'
 ```
 

@@ -27,6 +27,9 @@ pub struct ListArgs {
 pub struct ShowArgs {
     /// Project id (uuid)
     project_id: String,
+    /// Print raw JSON instead of a summary
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Deserialize)]
@@ -96,7 +99,31 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
 async fn show(client: &Client, args: ShowArgs) -> Result<()> {
     let path = format!("/api/projects/{}", args.project_id);
     let v: serde_json::Value = client.get_json(&path).await?;
-    println!("{}", serde_json::to_string_pretty(&v)?);
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&v)?);
+        return Ok(());
+    }
+    let s = |k: &str| {
+        v.get(k)
+            .and_then(|x| x.as_str())
+            .unwrap_or("-")
+            .to_string()
+    };
+    println!("id:          {}", s("id"));
+    println!("name:        {}", s("name"));
+    if let Some(desc) = v.get("description").and_then(|x| x.as_str()) {
+        if !desc.trim().is_empty() {
+            println!("description: {desc}");
+        }
+    }
+    println!("created:     {}", s("createdAt"));
+    println!("updated:     {}", s("updatedAt"));
+    if let Some(ls) = v.get("activeLabelSetId").and_then(|x| x.as_str()) {
+        println!("label set:   {ls}");
+    }
+    if let Some(role) = v.get("role").and_then(|x| x.as_str()) {
+        println!("your role:   {role}");
+    }
     Ok(())
 }
 

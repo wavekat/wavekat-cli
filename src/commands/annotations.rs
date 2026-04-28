@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Args as ClapArgs, Subcommand};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::client::Client;
 
@@ -30,6 +30,12 @@ pub struct ListArgs {
     /// Filter to a labeller's user id
     #[arg(long)]
     created_by: Option<i64>,
+    /// Print raw JSON instead of a table
+    #[arg(long)]
+    json: bool,
+    /// Include the ASR snippet under each row in the table view
+    #[arg(long)]
+    asr: bool,
 }
 
 #[derive(Serialize, Default)]
@@ -45,6 +51,29 @@ struct ListQuery {
     file_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     created_by: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Annotation {
+    id: String,
+    file_name: Option<String>,
+    label_key: String,
+    label_value: i64,
+    start_sec: f64,
+    end_sec: f64,
+    review_status: Option<String>,
+    asr_text: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListResponse {
+    annotations: Vec<Annotation>,
+    page: u32,
+    page_size: u32,
+    total: u32,
+    total_pages: u32,
 }
 
 pub async fn run(cmd: Cmd) -> Result<()> {
@@ -64,7 +93,55 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         file_id: args.file_id,
         created_by: args.created_by,
     };
-    let v: serde_json::Value = client.get_json_query(&path, &query).await?;
-    println!("{}", serde_json::to_string_pretty(&v)?);
+    if args.json {
+        let v: serde_json::Value = client.get_json_query(&path, &query).await?;
+        println!("{}", serde_json::to_string_pretty(&v)?);
+        return Ok(());
+    }
+    let resp: ListResponse = client.get_json_query(&path, &query).await?;
+    if resp.annotations.is_empty() {
+        println!("No annotations.");
+        return Ok(());
+    }
+    println!(
+        "{:<10}  {:<24}  {:<18}  {:<16}  REVIEW",
+        "ID", "FILE", "LABEL", "RANGE"
+    );
+    for a in &resp.annotations {
+        let id_short = a.id.get(..8).unwrap_or(&a.id);
+        let file = a.file_name.as_deref().unwrap_or("-");
+        let label = format!("{}={}", a.label_key, a.label_value);
+        let range = format!("{:.1}–{:.1}s", a.start_sec, a.end_sec);
+        let review = a.review_status.as_deref().unwrap_or("—");
+        println!(
+            "{:<10}  {:<24}  {:<18}  {:<16}  {}",
+            id_short,
+            truncate(file, 24),
+            truncate(&label, 18),
+            range,
+            review,
+        );
+        if args.asr {
+            if let Some(text) = a.asr_text.as_deref() {
+                if !text.trim().is_empty() {
+                    println!("            {}", truncate(text, 80));
+                }
+            }
+        }
+    }
+    println!(
+        "\nPage {}/{} · {} annotation(s) total · pageSize {}",
+        resp.page, resp.total_pages, resp.total, resp.page_size
+    );
     Ok(())
+}
+
+fn truncate(s: &str, n: usize) -> String {
+    if s.chars().count() > n {
+        let mut out: String = s.chars().take(n.saturating_sub(1)).collect();
+        out.push('…');
+        out
+    } else {
+        s.to_string()
+    }
 }
