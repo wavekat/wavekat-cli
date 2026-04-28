@@ -7,40 +7,52 @@
 [![Crates.io](https://img.shields.io/crates/v/wavekat-cli.svg)](https://crates.io/crates/wavekat-cli)
 
 Command-line client (`wk`) for the [WaveKat platform](https://platform.wavekat.com).
+Sign in once with your browser and inspect projects and annotations from the
+terminal.
 
-> [!NOTE]
-> Early development. `wk login` now uses a browser-based loopback OAuth
-> handshake (no more pasting cookies). Export commands are still pending.
+## Quick start
 
-## What it does today
+```sh
+curl -fsSL https://github.com/wavekat/wavekat-cli/releases/latest/download/install.sh | sh
+wk login
+wk projects list
+```
 
-| Command | What it calls | What it shows |
-|---------|---------------|---------------|
-| `wk login`               | loopback OAuth + `GET /api/me` | stores `{base_url, token}` under your config dir |
-| `wk logout`              | `POST /api/auth/cli/tokens/revoke-current` | revokes the token server-side and removes the local file |
-| `wk me`                  | `GET /api/me` | your login, id, name, email, role |
-| `wk projects list`       | `GET /api/projects` | paginated table of projects you can see |
-| `wk projects show <id>`  | `GET /api/projects/{id}` | project summary (`--json` for raw) |
-| `wk annotations list <project-id>` | `GET /api/projects/{id}/annotations` | paginated table with inline ASR (`--json` for raw) |
+That's it — you're signed in and looking at your projects. Run any command
+with `--help` to see all flags, or jump to the [Examples](#examples).
 
-Pagination on every list (`--page`, `--page-size`, default page size 20).
-The footer shows the current page and prints a ready-to-paste `Next:`
-line when more pages exist. Filters on annotations: `--label`,
-`--review-status`, `--file-id`, `--created-by`. Run any command with
-`--help` for the full set.
+> Dataset export commands (`wk exports …`) are coming next — see
+> [What's next](#whats-next).
+
+## What you can do today
+
+| Command | What it shows |
+|---------|---------------|
+| `wk login` / `wk logout`             | sign in via your browser, or sign out |
+| `wk me`                              | who you're signed in as |
+| `wk projects list`                   | paginated table of projects you can see |
+| `wk projects show <id>`              | details for one project (`--json` for raw) |
+| `wk annotations list <project-id>`   | paginated annotations with inline ASR text |
+
+Every list command supports `--page` / `--page-size` (default 20) and prints a
+ready-to-paste `Next:` line when more pages exist. `wk annotations list`
+also takes `--label`, `--review-status`, `--file-id`, and `--created-by`
+filters. Add `--json` to any command for machine-readable output you can pipe
+into `jq`.
+
+Supported on macOS (Apple Silicon + Intel) and Linux (x86_64 + aarch64).
 
 ## Install
 
-### curl | sh
+### curl | sh (recommended)
 
 ```sh
 curl -fsSL https://github.com/wavekat/wavekat-cli/releases/latest/download/install.sh | sh
 ```
 
-Pin a specific version with `WK_VERSION=v0.0.3` or pick the install directory
+Pin a specific version with `WK_VERSION=vX.Y.Z` or pick the install directory
 with `WK_INSTALL_DIR=$HOME/bin`. Defaults to `/usr/local/bin` if writable, else
-`$HOME/.local/bin`. Supports macOS (Apple Silicon + Intel) and Linux (x86_64 +
-aarch64, statically linked against musl).
+`$HOME/.local/bin`.
 
 ### Prebuilt binaries
 
@@ -62,41 +74,30 @@ wk --version
 
 ```sh
 wk login
-# (or: wk login --base-url https://platform.wavekat.com)
 ```
 
-What happens:
+`wk` opens your browser to the WaveKat platform, you click **Authorize**, and
+the terminal confirms you're signed in. The browser tab will say "You can
+close this tab" when it's done.
 
-1. `wk` binds an ephemeral port on `127.0.0.1`.
-2. Your default browser opens to `<platform>/cli-login`. If you're not
-   already signed in, you're bounced through the normal "Sign in with
-   GitHub" flow first and come back automatically.
-3. You click **Authorize** on the platform's confirmation page.
-4. The platform redirects the browser to the loopback URL with a freshly
-   minted token; `wk` captures it, verifies against `/api/me`, and writes
-   it to your config file.
-5. The browser tab shows "You can close this tab" and you're done in your
-   terminal.
-
-The token is a long-lived `wkcli_…` bearer credential. You can list and
-revoke tokens from your platform profile page; `wk logout` revokes the
-current token before clearing the local file.
+You can list and revoke tokens any time from your platform profile page.
+`wk logout` revokes the current token before clearing the local file.
 
 ### Headless / SSH
 
-If no browser is available on the local machine, run:
+If no browser is available locally, run:
 
 ```sh
 wk login --no-browser
 ```
 
-`wk` prints the authorization URL — open it on any browser that can
-reach the loopback port (typically with `ssh -L 1234:127.0.0.1:1234
-remote-host`, then open the URL the CLI prints).
+`wk` prints a URL — open it on any browser that can reach the loopback port
+(typically `ssh -L 1234:127.0.0.1:1234 remote-host`, then open the URL the
+CLI prints).
 
 ### CI / pre-minted token
 
-Pre-mint a token from the SPA (or the API), then:
+Pre-mint a token from your platform profile, then:
 
 ```sh
 WK_TOKEN='wkcli_…' WK_BASE_URL='https://platform.wavekat.com' wk login
@@ -132,6 +133,19 @@ wk annotations list <project-id> --label end_of_turn --review-status approved --
   | jq '.annotations | length'
 ```
 
+## API reference
+
+Each command maps to a single platform endpoint:
+
+| Command | Endpoint |
+|---------|----------|
+| `wk login`                         | loopback OAuth + `GET /api/me` |
+| `wk logout`                        | `POST /api/auth/cli/tokens/revoke-current` |
+| `wk me`                            | `GET /api/me` |
+| `wk projects list`                 | `GET /api/projects` |
+| `wk projects show <id>`            | `GET /api/projects/{id}` |
+| `wk annotations list <project-id>` | `GET /api/projects/{id}/annotations` |
+
 ## What's next
 
 The next milestone for the CLI is the **dataset export** feature, landing
@@ -140,6 +154,11 @@ together with the matching platform changes. It will add:
 - `wk exports create` / `list` / `show` / `download`.
 - A built-in adapter that materialises the canonical snapshot into the
   HuggingFace `datasets` format Pipecat `smart-turn` consumes.
+
+## Help and feedback
+
+- `wk --help` (or `wk <command> --help`) for usage details.
+- File issues at <https://github.com/wavekat/wavekat-cli/issues>.
 
 ## License
 
