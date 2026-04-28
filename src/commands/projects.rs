@@ -88,10 +88,13 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         style::bold("CREATED"),
     );
     for p in &resp.projects {
+        // Pad to fixed widths in raw bytes first, then style — ANSI escape
+        // codes count as bytes (not columns) inside Rust's `{:<N}`, so
+        // styling has to wrap an already-padded cell or columns drift.
+        let name = truncate(&p.name, 28);
         println!(
-            "{:<38}  {:<28}  {}",
-            style::dim(&p.id),
-            truncate(&p.name, 28),
+            "{}  {name:<28}  {}",
+            style::dim(&format!("{:<38}", p.id)),
             style::dim(&p.created_at),
         );
     }
