@@ -1,12 +1,16 @@
 //! `wk update` — replace the running binary with the latest release.
 //!
-//! Strategy: download `install.sh` from `/releases/latest` and pipe it
-//! to `sh`, with `WK_INSTALL_DIR` pointed at the directory containing
-//! the running binary so we replace this exact install rather than
-//! some other copy on `$PATH`. Delegating to the same script users run
-//! via `curl | sh` keeps target detection, checksum verification, and
-//! archive extraction in one tested place instead of duplicating it
-//! here in Rust.
+//! Strategy: resolve the target tag here (so we can tell the user a
+//! clear `vA → vB` line, and short-circuit the no-op case where we're
+//! already on the latest), then pipe `install.sh` to `sh` with
+//! `WK_VERSION` pinned to that exact tag and `WK_INSTALL_DIR` pointed
+//! at the directory containing the running binary. Pinning matters:
+//! `install.sh` re-resolves `/releases/latest` on its own, and if a
+//! release is mid-promotion at GitHub the two redirects can disagree.
+//!
+//! Delegating extraction + checksum verification + arch detection to
+//! the same `install.sh` users run via `curl | sh` keeps that logic in
+//! one tested place instead of duplicating it here in Rust.
 //!
 //! Linux quirk: GNU coreutils `install` opens the destination with
 //! `O_CREAT|O_TRUNC`, which fails with `ETXTBSY` when the destination
@@ -38,23 +42,22 @@ pub struct Args {
     /// latest release.
     #[arg(long)]
     version: Option<String>,
+    /// Reinstall even if the resolved target version matches the
+    /// running binary. Useful for re-running `wk update` after a
+    /// broken install or to re-pin a specific tag.
+    #[arg(long)]
+    force: bool,
 }
 
 pub async fn run(args: Args) -> Result<()> {
     if args.check {
         return run_check(args.version.as_deref()).await;
     }
-    run_install(args.version.as_deref()).await
+    run_install(args.version.as_deref(), args.force).await
 }
 
 async fn run_check(pin: Option<&str>) -> Result<()> {
-    let target = match pin {
-        Some(v) => v.trim_start_matches('v').to_string(),
-        None => resolve_latest_tag()
-            .await?
-            .trim_start_matches('v')
-            .to_string(),
-    };
+    let target = resolve_target_version(pin).await?;
     if target == CURRENT {
         println!("{} wk {CURRENT} is the latest.", style::green("✓"));
     } else {
@@ -69,7 +72,30 @@ async fn run_check(pin: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-async fn run_install(pin: Option<&str>) -> Result<()> {
+async fn run_install(pin: Option<&str>, force: bool) -> Result<()> {
+    // Resolve the target tag up front so the user sees a clear before
+    // / after line, and so we can short-circuit the silent no-op case
+    // where /releases/latest is still pointing at the previous version
+    // (e.g. mid release-plz promotion). Without this, `wk update`
+    // would call install.sh, install.sh would resolve the same tag
+    // we're already on, and the user would see install.sh's
+    // "Installing wk vX" message and assume something newer arrived.
+    let target_v = resolve_target_version(pin).await?;
+    if target_v == CURRENT && !force {
+        println!(
+            "{} wk {CURRENT} is the latest — nothing to do. \
+             Pass `--force` to reinstall.",
+            style::green("✓"),
+        );
+        return Ok(());
+    }
+    eprintln!(
+        "{} updating wk {} → {}",
+        style::dim("·"),
+        CURRENT,
+        style::bold(&target_v),
+    );
+
     let cur = std::env::current_exe().context("resolving current executable path")?;
     let install_dir = cur
         .parent()
@@ -91,7 +117,11 @@ async fn run_install(pin: Option<&str>) -> Result<()> {
         )
     })?;
 
-    let outcome = run_installer(&install_dir, pin).await;
+    // Pin install.sh to the exact tag we resolved so it doesn't
+    // re-resolve /releases/latest and potentially pick a different
+    // version than the one we just told the user about.
+    let pinned = with_v_prefix(&target_v);
+    let outcome = run_installer(&install_dir, &pinned).await;
 
     if outcome.is_err() {
         // Restore the prior binary so a failed update doesn't leave
@@ -99,12 +129,16 @@ async fn run_install(pin: Option<&str>) -> Result<()> {
         let _ = std::fs::rename(&aside, &cur);
     } else {
         let _ = std::fs::remove_file(&aside);
-        println!("{} wk updated.", style::green("✓"));
+        println!(
+            "{} wk updated to {}.",
+            style::green("✓"),
+            style::bold(&target_v)
+        );
     }
     outcome
 }
 
-async fn run_installer(install_dir: &Path, pin: Option<&str>) -> Result<()> {
+async fn run_installer(install_dir: &Path, pinned_tag: &str) -> Result<()> {
     eprintln!("{} fetching installer…", style::dim("·"));
     let client = reqwest::Client::builder()
         .user_agent(concat!("wavekat-cli/", env!("CARGO_PKG_VERSION")))
@@ -121,12 +155,10 @@ async fn run_installer(install_dir: &Path, pin: Option<&str>) -> Result<()> {
     let mut cmd = Command::new("sh");
     cmd.arg("-s")
         .env("WK_INSTALL_DIR", install_dir)
+        .env("WK_VERSION", pinned_tag)
         .stdin(Stdio::piped())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
-    if let Some(v) = pin {
-        cmd.env("WK_VERSION", v);
-    }
     let mut child = cmd.spawn().context("spawning sh to run installer")?;
     if let Some(mut stdin) = child.stdin.take() {
         stdin.write_all(script.as_bytes()).await?;
@@ -137,6 +169,24 @@ async fn run_installer(install_dir: &Path, pin: Option<&str>) -> Result<()> {
         bail!("installer exited with status {status}");
     }
     Ok(())
+}
+
+async fn resolve_target_version(pin: Option<&str>) -> Result<String> {
+    Ok(match pin {
+        Some(v) => v.trim_start_matches('v').to_string(),
+        None => resolve_latest_tag()
+            .await?
+            .trim_start_matches('v')
+            .to_string(),
+    })
+}
+
+fn with_v_prefix(version: &str) -> String {
+    if version.starts_with('v') {
+        version.to_string()
+    } else {
+        format!("v{version}")
+    }
 }
 
 async fn resolve_latest_tag() -> Result<String> {
@@ -162,4 +212,19 @@ async fn resolve_latest_tag() -> Result<String> {
         .rsplit_once("/tag/")
         .map(|(_, t)| t.to_string())
         .ok_or_else(|| anyhow!("could not parse tag from redirect: {location}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn with_v_prefix_adds_when_missing() {
+        assert_eq!(with_v_prefix("0.0.7"), "v0.0.7");
+    }
+
+    #[test]
+    fn with_v_prefix_idempotent() {
+        assert_eq!(with_v_prefix("v0.0.7"), "v0.0.7");
+    }
 }
