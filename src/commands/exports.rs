@@ -603,7 +603,7 @@ async fn download(client: &Client, args: DownloadArgs) -> Result<()> {
     let downloaded = total - skipped;
     eprintln!(
         "{} {downloaded} clip(s){} {}",
-        style::bold("done:"),
+        style::dim("downloaded"),
         if skipped > 0 {
             format!(" ({skipped} already on disk, skipped)")
         } else {

@@ -1,2 +1,5 @@
 /target
 Cargo.lock
+
+# Local download/export scratch dirs (e.g. `wk exports download --out ./export-…`).
+/export-*/
