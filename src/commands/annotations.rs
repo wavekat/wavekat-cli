@@ -33,9 +33,6 @@ pub struct ListArgs {
     /// Print raw JSON instead of a table
     #[arg(long)]
     json: bool,
-    /// Include the ASR snippet under each row in the table view
-    #[arg(long)]
-    asr: bool,
 }
 
 #[derive(Serialize, Default)]
@@ -121,11 +118,10 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
             range,
             review,
         );
-        if args.asr {
-            if let Some(text) = a.asr_text.as_deref() {
-                if !text.trim().is_empty() {
-                    println!("            {}", truncate(text, 80));
-                }
+        if let Some(text) = a.asr_text.as_deref() {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                println!("            {}", truncate(trimmed, 96));
             }
         }
     }
@@ -133,6 +129,18 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         "\nPage {}/{} · {} annotation(s) total · pageSize {}",
         resp.page, resp.total_pages, resp.total, resp.page_size
     );
+    if resp.page < resp.total_pages {
+        println!(
+            "Next: wk annotations list {} --page {}{}",
+            args.project_id,
+            resp.page + 1,
+            if resp.page_size != 20 {
+                format!(" --page-size {}", resp.page_size)
+            } else {
+                String::new()
+            },
+        );
+    }
     Ok(())
 }
 

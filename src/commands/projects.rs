@@ -93,6 +93,17 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         "\nPage {}/{} · {} project(s) total · pageSize {}",
         resp.page, resp.total_pages, resp.total, resp.page_size
     );
+    if resp.page < resp.total_pages {
+        println!(
+            "Next: wk projects list --page {}{}",
+            resp.page + 1,
+            if resp.page_size != 20 {
+                format!(" --page-size {}", resp.page_size)
+            } else {
+                String::new()
+            },
+        );
+    }
     Ok(())
 }
 

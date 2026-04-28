@@ -21,11 +21,13 @@ Command-line client (`wk`) for the [WaveKat platform](https://platform.wavekat.c
 | `wk me`                  | `GET /api/me` | your login, id, name, email, role |
 | `wk projects list`       | `GET /api/projects` | paginated table of projects you can see |
 | `wk projects show <id>`  | `GET /api/projects/{id}` | project summary (`--json` for raw) |
-| `wk annotations list <project-id>` | `GET /api/projects/{id}/annotations` | paginated table (`--json` for raw, `--asr` to inline ASR) |
+| `wk annotations list <project-id>` | `GET /api/projects/{id}/annotations` | paginated table with inline ASR (`--json` for raw) |
 
-Pagination on every list (`--page`, `--page-size`). Filters on annotations:
-`--label`, `--review-status`, `--file-id`, `--created-by`. Run any command
-with `--help` for the full set.
+Pagination on every list (`--page`, `--page-size`, default page size 20).
+The footer shows the current page and prints a ready-to-paste `Next:`
+line when more pages exist. Filters on annotations: `--label`,
+`--review-status`, `--file-id`, `--created-by`. Run any command with
+`--help` for the full set.
 
 ## Install
 
@@ -111,7 +113,7 @@ wk projects list --page-size 5
 
 wk projects list --json | jq '.projects[].name'
 
-# Default: human-readable table. Add `--asr` for the ASR snippet under each row.
+# Default: human-readable table with the ASR snippet under each row.
 wk annotations list <project-id> --label end_of_turn --review-status approved
 
 # Pipe raw JSON into jq for scripting.
