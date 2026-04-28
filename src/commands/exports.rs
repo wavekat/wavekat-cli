@@ -630,10 +630,14 @@ async fn adapt_smart_turn(args: AdaptSmartTurnArgs) -> Result<()> {
         .map(|(k, v)| format!("{k}={v}"))
         .collect();
     println!(
-        "wrote {} examples to {} ({})",
+        "wrote {} examples to {} ({}) {}",
         written.total,
         args.out.display(),
-        parts.join(", ")
+        parts.join(", "),
+        style::dim(&format!(
+            "in {}",
+            crate::progress::format_elapsed(written.elapsed)
+        )),
     );
     Ok(())
 }
