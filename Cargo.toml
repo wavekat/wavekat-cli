@@ -27,7 +27,7 @@ rand = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-util"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-util", "process"] }
 unicode-width = "0.2"
 url = "2"
 webbrowser = "1"
