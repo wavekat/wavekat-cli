@@ -32,7 +32,7 @@ use crate::client::Client;
 use crate::config::{self, AuthConfig};
 use crate::style;
 
-const DEFAULT_BASE_URL: &str = "https://platform.wavekat.com";
+pub const DEFAULT_BASE_URL: &str = "https://platform.wavekat.com";
 
 #[derive(ClapArgs)]
 pub struct Args {

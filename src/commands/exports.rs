@@ -15,6 +15,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::client::Client;
 use crate::commands::exports_smart_turn::{self, AdaptOptions};
+use crate::progress::with_spinner;
 use crate::style;
 
 #[derive(Subcommand)]
@@ -431,7 +432,12 @@ async fn create(client: &Client, args: CreateArgs) -> Result<()> {
         },
     };
     let path = format!("/api/projects/{}/exports", args.project_id);
-    let resp: serde_json::Value = client.post_json(&path, &body).await?;
+    // The platform builds the export synchronously (copies every clip
+    // into R2 before responding), so this can take seconds-to-minutes.
+    // Spinner is purely a liveness signal — there's no progress field
+    // to render until the platform exposes one.
+    let resp: serde_json::Value =
+        with_spinner("Creating export…", client.post_json(&path, &body)).await?;
     if args.json {
         println!("{}", serde_json::to_string_pretty(&resp)?);
         return Ok(());

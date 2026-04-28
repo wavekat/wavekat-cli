@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 mod client;
 mod commands;
 mod config;
+mod progress;
 mod style;
 
 // Both `-V` and `--version` print the same string — that matches what
@@ -55,6 +56,8 @@ enum Command {
         #[command(subcommand)]
         command: commands::exports::Cmd,
     },
+    /// Print the local CLI version and probe the platform's `/api/health`
+    Version(commands::version::Args),
 }
 
 #[tokio::main]
@@ -67,5 +70,6 @@ async fn main() -> Result<()> {
         Command::Projects { command } => commands::projects::run(command).await,
         Command::Annotations { command } => commands::annotations::run(command).await,
         Command::Exports { command } => commands::exports::run(command).await,
+        Command::Version(args) => commands::version::run(args).await,
     }
 }
