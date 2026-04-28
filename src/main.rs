@@ -6,10 +6,27 @@ mod commands;
 mod config;
 mod style;
 
+// Short form (`wk -V`) keeps it terse; the long form (`wk --version`)
+// pads in the package name and homepage so a user pasting the output
+// into a bug report doesn't have to add context. clap prepends the
+// bin name ("wk ") to whatever we give it, so the constants here pick
+// up at the version number.
+const SHORT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const LONG_VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    "\n",
+    env!("CARGO_PKG_NAME"),
+    " — ",
+    env!("CARGO_PKG_DESCRIPTION"),
+    "\n",
+    env!("CARGO_PKG_REPOSITORY"),
+);
+
 #[derive(Parser)]
 #[command(
     name = "wk",
-    version,
+    version = SHORT_VERSION,
+    long_version = LONG_VERSION,
     about = "Command-line client for the WaveKat platform",
     long_about = "Command-line client for the WaveKat platform.\n\nRun `wk login` to authenticate. \
                   Credentials are stored under your platform config dir (e.g. ~/.config/wavekat/auth.json on Linux/macOS)."
