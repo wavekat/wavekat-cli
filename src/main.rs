@@ -25,8 +25,11 @@ const VERSION: &str = concat!(
     name = "wk",
     version = VERSION,
     about = "Command-line client for the WaveKat platform",
-    long_about = "Command-line client for the WaveKat platform.\n\nRun `wk login` to authenticate. \
-                  Credentials are stored under your platform config dir (e.g. ~/.config/wavekat/auth.json on Linux/macOS)."
+    long_about = "Command-line client for the WaveKat platform.\n\n\
+                  Run `wk login` to authenticate. Credentials are stored under your platform \
+                  config dir (e.g. ~/.config/wavekat/auth.json on Linux/macOS).\n\n\
+                  Run `wk update` to upgrade in place, or `wk agents` for the AI-agent \
+                  integration guide (also at https://github.com/wavekat/wavekat-cli/blob/main/AGENTS.md)."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -58,6 +61,10 @@ enum Command {
     },
     /// Print the local CLI version and probe the platform's `/api/health`
     Version(commands::version::Args),
+    /// Replace this binary with the latest release (or `--check` to peek)
+    Update(commands::update::Args),
+    /// Print the bundled AGENTS.md guide for AI agents using `wk`
+    Agents,
 }
 
 #[tokio::main]
@@ -71,5 +78,7 @@ async fn main() -> Result<()> {
         Command::Annotations { command } => commands::annotations::run(command).await,
         Command::Exports { command } => commands::exports::run(command).await,
         Command::Version(args) => commands::version::run(args).await,
+        Command::Update(args) => commands::update::run(args).await,
+        Command::Agents => commands::agents::run().await,
     }
 }
