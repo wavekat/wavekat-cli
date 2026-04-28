@@ -343,3 +343,61 @@ fn html_escape(s: &str) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // RFC 4648 test vectors, adapted to URL-safe alphabet without padding.
+    #[test]
+    fn base64url_rfc_vectors() {
+        assert_eq!(base64url(b""), "");
+        assert_eq!(base64url(b"f"), "Zg");
+        assert_eq!(base64url(b"fo"), "Zm8");
+        assert_eq!(base64url(b"foo"), "Zm9v");
+        assert_eq!(base64url(b"foob"), "Zm9vYg");
+        assert_eq!(base64url(b"fooba"), "Zm9vYmE");
+        assert_eq!(base64url(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn base64url_uses_url_safe_alphabet() {
+        // Bytes that would yield `+` and `/` under standard base64.
+        // 0xfb,0xff,0xff -> 6-bit indices 62, 63, 63, 63 -> "-___".
+        assert_eq!(base64url(&[0xfb, 0xff, 0xff]), "-___");
+        // Confirm none of the disallowed characters ever appear.
+        let big: Vec<u8> = (0u8..=255).collect();
+        let out = base64url(&big);
+        assert!(!out.contains('+'));
+        assert!(!out.contains('/'));
+        assert!(!out.contains('='));
+    }
+
+    #[test]
+    fn random_state_shape() {
+        let s = random_state();
+        // 24 bytes -> 32 base64url chars (no padding).
+        assert_eq!(s.len(), 32);
+        let alpha: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        for b in s.as_bytes() {
+            assert!(alpha.contains(b), "unexpected byte {b:#x} in state");
+        }
+    }
+
+    #[test]
+    fn random_state_is_not_constant() {
+        // Astronomically unlikely to collide; protects against an accidental
+        // hard-coded or zeroed RNG.
+        assert_ne!(random_state(), random_state());
+    }
+
+    #[test]
+    fn html_escape_handles_metacharacters() {
+        assert_eq!(
+            html_escape("<a href=\"x\">it's & ok</a>"),
+            "&lt;a href=&quot;x&quot;&gt;it&#39;s &amp; ok&lt;/a&gt;",
+        );
+        assert_eq!(html_escape("plain text"), "plain text");
+        assert_eq!(html_escape(""), "");
+    }
+}

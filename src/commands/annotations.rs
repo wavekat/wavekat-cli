@@ -190,3 +190,55 @@ fn truncate_width(s: &str, cols: usize) -> String {
     }
     s.to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use unicode_width::UnicodeWidthStr;
+
+    #[test]
+    fn truncate_passes_short_strings() {
+        assert_eq!(truncate("hi", 5), "hi");
+        assert_eq!(truncate("", 5), "");
+        // Boundary: exactly n chars must not be truncated.
+        assert_eq!(truncate("abcde", 5), "abcde");
+    }
+
+    #[test]
+    fn truncate_clips_long_strings_with_ellipsis() {
+        let out = truncate("abcdefghij", 5);
+        assert_eq!(out.chars().count(), 5);
+        assert!(out.ends_with('…'));
+        assert_eq!(out, "abcd…");
+    }
+
+    #[test]
+    fn truncate_counts_chars_not_bytes() {
+        // Multi-byte chars should be counted once, not by byte length.
+        let out = truncate("日本語テキスト", 4);
+        assert_eq!(out.chars().count(), 4);
+        assert!(out.ends_with('…'));
+    }
+
+    #[test]
+    fn truncate_width_passes_when_fits() {
+        assert_eq!(truncate_width("hello", 80), "hello");
+    }
+
+    #[test]
+    fn truncate_width_respects_visible_columns() {
+        let out = truncate_width("abcdefghij", 5);
+        assert!(out.ends_with('…'));
+        assert!(out.width() <= 5);
+        assert_eq!(out, "abcd…");
+    }
+
+    #[test]
+    fn truncate_width_treats_cjk_as_double_width() {
+        // Each CJK char is width 2; budget of 5 fits at most two chars
+        // plus the ellipsis (2 + 2 + 1 = 5).
+        let out = truncate_width("日本語テキスト", 5);
+        assert!(out.ends_with('…'));
+        assert!(out.width() <= 5);
+    }
+}

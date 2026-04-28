@@ -156,3 +156,22 @@ fn truncate(s: &str, n: usize) -> String {
         s.to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_passes_short_strings() {
+        assert_eq!(truncate("hi", 28), "hi");
+        assert_eq!(truncate("", 5), "");
+    }
+
+    #[test]
+    fn truncate_clips_long_strings_with_ellipsis() {
+        let out = truncate("abcdefghij", 5);
+        assert_eq!(out.chars().count(), 5);
+        assert!(out.ends_with('…'));
+        assert_eq!(out, "abcd…");
+    }
+}

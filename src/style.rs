@@ -71,3 +71,40 @@ pub fn role(s: &str) -> String {
         _ => s.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // These tests assert on substrings rather than exact bytes, so they
+    // pass whether `enabled()` decides colour is on or off — the cached
+    // OnceLock means we can't reliably flip the mode mid-test-binary.
+
+    #[test]
+    fn bold_preserves_payload() {
+        assert!(bold("hello").contains("hello"));
+    }
+
+    #[test]
+    fn review_known_states_contain_label() {
+        assert!(review(Some("approved")).contains("approved"));
+        assert!(review(Some("rejected")).contains("rejected"));
+        assert!(review(Some("needs_fix")).contains("needs_fix"));
+    }
+
+    #[test]
+    fn review_unknown_passes_through() {
+        // Unknown statuses must render verbatim — no swallowing.
+        assert_eq!(review(Some("draft")), "draft");
+    }
+
+    #[test]
+    fn review_none_renders_em_dash() {
+        assert!(review(None).contains('—'));
+    }
+
+    #[test]
+    fn role_unknown_passes_through() {
+        assert_eq!(role("admin"), "admin");
+    }
+}
