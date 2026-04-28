@@ -31,17 +31,6 @@ line when more pages exist. Filters on annotations: `--label`,
 
 ## Install
 
-### Homebrew (macOS / Linux)
-
-```sh
-brew install wavekat/tap/wk
-```
-
-The tap lives at [`wavekat/homebrew-tap`](https://github.com/wavekat/homebrew-tap)
-and is bumped automatically on each release. (Unprefixed `brew install wk`
-collides with an unrelated formula in homebrew-core, so the tap prefix is
-required.)
-
 ### curl | sh
 
 ```sh
