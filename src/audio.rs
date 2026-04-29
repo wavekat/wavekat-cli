@@ -17,6 +17,30 @@
 //! mostly exists to handle the long tail of imported clips, where
 //! aliasing introduced by a fast resampler isn't worth a heavyweight
 //! dependency.
+//!
+//! # Why not `wavekat-core`?
+//!
+//! `wavekat-core` ships an `AudioFrame` with `from_wav` / `write_wav`
+//! (feature `wav`) and a sinc resampler (feature `resample`), and the
+//! CLI is part of the same ecosystem — so adopting it is the obvious
+//! question. We deliberately don't, for three reasons:
+//!
+//! 1. **Multi-channel downmix.** `wavekat-core::AudioFrame::from_wav`
+//!    reads samples flat without tracking channel count, so stereo or
+//!    higher inputs would deserialise incorrectly. Reshaping
+//!    multi-channel imports is the main reason this module exists.
+//! 2. **Sample-format coverage.** `from_wav` handles only f32 and
+//!    16-bit Int. Imported clips also show up as 8-bit, 24-bit, and
+//!    32-bit Int, all of which we decode here.
+//! 3. **Output format.** `write_wav` always emits 32-bit float; the
+//!    smart-turn parquet wants 16-bit PCM for size.
+//!
+//! Adopting `wavekat-core` would also pull `rubato` into the release
+//! binary for the resample path, which conflicts with the CLI's
+//! size-tuned release profile. The principled long-term fix is to push
+//! multi-channel downmix, more Int bit-depths, and a PCM-16 writer into
+//! `wavekat-core` and then consume it here; until that lands, the
+//! ~120 lines below are load-bearing.
 
 use std::io::Cursor;
 
