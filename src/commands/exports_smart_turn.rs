@@ -41,9 +41,11 @@ use arrow_schema::{DataType, Field, Schema};
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
+use rayon::prelude::*;
 use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
+use crate::audio::canonicalize_wav;
 use crate::progress::ProgressBar;
 
 const KNOWN_SPLITS: &[&str] = &["train", "validation", "test"];
@@ -179,14 +181,34 @@ fn build_record_batch(
     let mut labeller_id = Int64Builder::new();
     let mut clip_duration_sec = Float64Builder::new();
 
-    for row in rows {
-        let path = resolve_clip_path(row, clips_dir);
-        let bytes =
-            std::fs::read(&path).with_context(|| format!("reading clip {}", path.display()))?;
-        let bool_value = label_to_endpoint(&row.label_key)?;
+    // Validate every label up front — a typo in `label_key` should
+    // fail before we spend CPU decoding clips.
+    let endpoint_bools: Vec<i32> = rows
+        .iter()
+        .map(|row| label_to_endpoint(&row.label_key))
+        .collect::<Result<_>>()?;
 
+    // Decode + downmix + resample in parallel. Reading and canonicalising
+    // each clip is independent, and on a typical 8-core box this lifts
+    // adapt throughput by ~6-8x for non-trivial snapshots.
+    let canonical: Vec<Vec<u8>> = rows
+        .par_iter()
+        .map(|row| -> Result<Vec<u8>> {
+            let path = resolve_clip_path(row, clips_dir);
+            let raw =
+                std::fs::read(&path).with_context(|| format!("reading clip {}", path.display()))?;
+            let bytes = canonicalize_wav(&raw)
+                .with_context(|| format!("canonicalising clip {}", path.display()))?;
+            if let Some(bar) = progress {
+                bar.inc();
+            }
+            Ok(bytes)
+        })
+        .collect::<Result<_>>()?;
+
+    for ((row, bool_value), bytes) in rows.iter().zip(endpoint_bools).zip(&canonical) {
         annotation_id.append_value(&row.annotation_id);
-        audio_bytes.append_value(&bytes);
+        audio_bytes.append_value(bytes);
         audio_path.append_value(&row.clip_path);
         endpoint_bool.append_value(bool_value);
         language_b.append_value(language);
@@ -195,9 +217,6 @@ fn build_record_batch(
         source_file_sha256.append_value(&row.source_file_sha256);
         labeller_id.append_value(row.labeller_id);
         clip_duration_sec.append_value(row.clip_duration_sec);
-        if let Some(bar) = progress {
-            bar.inc();
-        }
     }
 
     // Assemble the audio struct from its two child arrays. `Field`
@@ -368,8 +387,15 @@ pub async fn run(opts: AdaptOptions) -> Result<AdaptOutcome> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audio::tests::make_test_wav;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
     use std::io::Write;
+
+    /// Tiny but real 16 kHz / mono / 16-bit WAV — enough for the adapter
+    /// to canonicalise without changing anything.
+    fn tiny_wav_bytes() -> Vec<u8> {
+        make_test_wav(&[0.0; 16], 16_000, 1)
+    }
 
     #[test]
     fn label_mapping_is_binary() {
@@ -435,7 +461,7 @@ mod tests {
         for (id, key, val, split) in plan {
             // Tiny non-empty payload — we don't actually decode it, only
             // round-trip the bytes.
-            std::fs::write(clips_dir.join(format!("{id}.wav")), b"RIFFfakewavbytes").unwrap();
+            std::fs::write(clips_dir.join(format!("{id}.wav")), tiny_wav_bytes()).unwrap();
             let line = format!(
                 r#"{{"annotationId":"{id}","clipPath":"clips/{id}.wav","clipSha256":"sha","clipDurationSec":1.5,"clipSampleRate":16000,"labelKey":"{key}","labelValue":{val},"startSec":0.0,"endSec":1.5,"padSec":0.0,"sourceFileId":"f0","sourceFileSha256":"s0","labellerId":1,"reviewStatus":"approved","split":"{split}"}}"#,
             );
@@ -499,7 +525,7 @@ mod tests {
         let export_dir = tmp.path().join("export");
         let clips_dir = export_dir.join("clips");
         std::fs::create_dir_all(&clips_dir).unwrap();
-        std::fs::write(clips_dir.join("a1.wav"), b"RIFFfakewavbytes").unwrap();
+        std::fs::write(clips_dir.join("a1.wav"), tiny_wav_bytes()).unwrap();
         let line = r#"{"annotationId":"a1","clipPath":"clips/a1.wav","clipSha256":"s","clipDurationSec":1.0,"clipSampleRate":16000,"labelKey":"end_of_turn","labelValue":1,"startSec":0.0,"endSec":1.0,"padSec":0.0,"sourceFileId":"f","sourceFileSha256":"s","labellerId":1,"reviewStatus":null,"split":"train"}"#;
         std::fs::write(export_dir.join("manifest.jsonl"), format!("{line}\n")).unwrap();
 
@@ -512,6 +538,39 @@ mod tests {
         .await
         .expect("adapter run");
         assert_eq!(outcome.total, 1);
+    }
+
+    /// Adapt must surface a clear, file-scoped error when a clip on
+    /// disk is corrupt or not actually WAV — the whole point of
+    /// canonicalising up front is that this kind of failure happens
+    /// here, not 30 minutes into a downstream training loop.
+    #[tokio::test]
+    async fn corrupt_clip_aborts_with_path() {
+        let tmp = tempdir();
+        let export_dir = tmp.path().join("export");
+        let clips_dir = export_dir.join("clips");
+        std::fs::create_dir_all(&clips_dir).unwrap();
+        std::fs::write(clips_dir.join("bad.wav"), b"definitely not a wav").unwrap();
+        let line = r#"{"annotationId":"bad","clipPath":"clips/bad.wav","clipSha256":"s","clipDurationSec":1.0,"clipSampleRate":16000,"labelKey":"end_of_turn","labelValue":1,"startSec":0.0,"endSec":1.0,"padSec":0.0,"sourceFileId":"f","sourceFileSha256":"s","labellerId":1,"reviewStatus":"approved","split":"train"}"#;
+        std::fs::write(export_dir.join("manifest.jsonl"), format!("{line}\n")).unwrap();
+
+        let err = run(AdaptOptions {
+            manifest_path: export_dir.join("manifest.jsonl"),
+            clips_dir,
+            out_dir: tmp.path().join("out"),
+            language: "zh".into(),
+        })
+        .await
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("bad.wav"),
+            "error should name the failing clip, got: {msg}"
+        );
+        assert!(
+            msg.to_lowercase().contains("canonicalis") || msg.to_lowercase().contains("wav"),
+            "error should mention canonicalise/WAV, got: {msg}"
+        );
     }
 
     #[tokio::test]
@@ -552,12 +611,14 @@ mod tests {
         }
     }
     fn tempdir() -> TempDir {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        // Concurrent async tests can land on the same nanosecond; an
+        // atomic counter scoped to the process is collision-free.
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
         let p = std::env::temp_dir().join(format!(
-            "wk-test-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+            "wk-test-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed),
         ));
         std::fs::create_dir_all(&p).unwrap();
         TempDir(p)

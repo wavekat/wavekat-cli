@@ -179,6 +179,12 @@ and `continuation` (→ 0). Anything richer is rejected; binary collapse
 of a richer label set must be an explicit user decision via the export
 filter, not a silent default in the adapter.
 
+Every clip is decoded, downmixed to mono, resampled to 16 kHz, and
+re-encoded as 16-bit PCM WAV before being written into the parquet.
+This both validates the source bytes (corrupt or non-WAV clips fail at
+adapt time, with the failing path in the error) and guarantees the
+shards contain a uniform shape downstream notebooks can rely on.
+
 ## API reference
 
 Each command maps to a single platform endpoint:

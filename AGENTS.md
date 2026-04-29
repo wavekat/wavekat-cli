@@ -171,6 +171,11 @@ wk annotations list "$PROJECT_ID" \
   → 1, `continuation` → 0). Richer label sets must be collapsed at
   export time via the `--label-key` filter, not silently in the
   adapter.
+- **The smart-turn adapter canonicalises audio.** Every clip is decoded,
+  downmixed to mono, resampled to 16 kHz, and re-encoded as 16-bit PCM
+  WAV before landing in the parquet. A clip that won't decode aborts
+  the run with the failing path in the error — agents can treat such
+  errors as a manifest/clip integrity issue, not an adapter bug.
 
 ## Reporting problems
 
