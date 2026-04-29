@@ -25,6 +25,7 @@ futures-util = "0.3"
 hound = "3.5"
 parquet = { version = "53", default-features = false, features = ["arrow", "snap"] }
 rand = "0.8"
+rayon = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
