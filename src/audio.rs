@@ -126,7 +126,8 @@ fn encode_pcm16(samples: &[f32]) -> Result<Vec<u8>> {
     let mut buf: Vec<u8> = Vec::new();
     {
         let cursor = Cursor::new(&mut buf);
-        let mut writer = WavWriter::new(cursor, spec).context("hound: building output WAV writer")?;
+        let mut writer =
+            WavWriter::new(cursor, spec).context("hound: building output WAV writer")?;
         for &s in samples {
             let clamped = s.clamp(-1.0, 1.0);
             let v = (clamped * i16::MAX as f32) as i16;

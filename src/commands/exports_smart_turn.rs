@@ -195,8 +195,8 @@ fn build_record_batch(
         .par_iter()
         .map(|row| -> Result<Vec<u8>> {
             let path = resolve_clip_path(row, clips_dir);
-            let raw = std::fs::read(&path)
-                .with_context(|| format!("reading clip {}", path.display()))?;
+            let raw =
+                std::fs::read(&path).with_context(|| format!("reading clip {}", path.display()))?;
             let bytes = canonicalize_wav(&raw)
                 .with_context(|| format!("canonicalising clip {}", path.display()))?;
             if let Some(bar) = progress {
