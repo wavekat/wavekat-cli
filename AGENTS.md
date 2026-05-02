@@ -65,6 +65,10 @@ and the layout is not stable.
 | `wk exports list <project-id> --json`       | `exports`, `page`, `pageSize`, `total`, `totalPages`         |
 | `wk exports show <id> --json`               | full export row                                              |
 | `wk exports create … --json`                | the newly created export row (includes `id`, `status`)       |
+| `wk files list <project-id> --json`         | `files`, `page`, `pageSize`, `total`, `totalPages`           |
+| `wk files reserve <id> [<id>…] --json`      | array of `{id, …}` rows (one per file) on success            |
+| `wk files unreserve <id> [<id>…] --json`    | array of `{id, ok\|error}` rows                              |
+| `wk files summary <project-id> --json`      | `{fileCount, annotationCount, labelledSeconds}`              |
 
 Local file producers (`wk exports download`, `wk exports adapt smart-turn`)
 write files to disk and print the output path on stdout. Progress goes
@@ -150,6 +154,32 @@ done
 ```sh
 wk annotations list "$PROJECT_ID" \
   --review-status needs_fix --review-status unreviewed \
+  --json
+```
+
+### Reserve a stable held-out test set
+
+The platform supports per-file test-set reservation
+(see `docs/08-test-set-reservation.md` in `wavekat-platform`). Reserved
+files get pinned to the `test` split on every export so the holdout
+stays stable across reshuffles. Owner / `root` only.
+
+```sh
+# Mark a curated batch of files as the test set.
+wk files reserve "$FILE_ID_A" "$FILE_ID_B" "$FILE_ID_C"
+
+# Inspect the reservation surface for a project.
+wk files summary "$PROJECT_ID" --json
+wk files list "$PROJECT_ID" --test-reserved true --json
+
+# Export with the reserved files as the test split. Note the 2-tuple
+# `--ratios` — the third slot is implicit 0 because `test` is filled
+# from reserved files only.
+wk exports create "$PROJECT_ID" \
+  --name "snapshot $(date -I)" \
+  --review-status approved \
+  --use-reserved-test-files \
+  --split random --seed 42 --ratios 0.9,0.1 \
   --json
 ```
 

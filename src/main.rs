@@ -60,6 +60,11 @@ enum Command {
         #[command(subcommand)]
         command: commands::exports::Cmd,
     },
+    /// Manage project files (list, reserve / unreserve test set)
+    Files {
+        #[command(subcommand)]
+        command: commands::files::Cmd,
+    },
     /// Print the local CLI version and probe the platform's `/api/health`
     Version(commands::version::Args),
     /// Replace this binary with the latest release (or `--check` to peek)
@@ -78,6 +83,7 @@ async fn main() -> Result<()> {
         Command::Projects { command } => commands::projects::run(command).await,
         Command::Annotations { command } => commands::annotations::run(command).await,
         Command::Exports { command } => commands::exports::run(command).await,
+        Command::Files { command } => commands::files::run(command).await,
         Command::Version(args) => commands::version::run(args).await,
         Command::Update(args) => commands::update::run(args).await,
         Command::Agents => commands::agents::run().await,
