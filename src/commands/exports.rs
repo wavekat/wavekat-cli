@@ -121,12 +121,18 @@ pub struct CreateArgs {
     /// Use the project's reserved files as the entire test split. The
     /// non-reserved rows are split between train and validation only —
     /// see docs/08-test-set-reservation.md. Omit to disable explicitly.
-    #[arg(long = "use-reserved-test-files", overrides_with = "no_use_reserved_test_files")]
+    #[arg(
+        long = "use-reserved-test-files",
+        overrides_with = "no_use_reserved_test_files"
+    )]
     use_reserved_test_files: bool,
     /// Force-disable the reservation flow even if the project has
     /// reserved files. Primarily for scripted exports that want the
     /// classic 3-way ratio behaviour regardless of project state.
-    #[arg(long = "no-use-reserved-test-files", overrides_with = "use_reserved_test_files")]
+    #[arg(
+        long = "no-use-reserved-test-files",
+        overrides_with = "use_reserved_test_files"
+    )]
     no_use_reserved_test_files: bool,
     /// Print the new export row as raw JSON.
     #[arg(long)]

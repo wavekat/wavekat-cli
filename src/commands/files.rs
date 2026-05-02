@@ -184,11 +184,7 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         )),
     );
     if resp.page < resp.total_pages {
-        let mut hint = format!(
-            "wk files list {} --page {}",
-            args.project_id,
-            resp.page + 1
-        );
+        let mut hint = format!("wk files list {} --page {}", args.project_id, resp.page + 1);
         if resp.page_size != 20 {
             hint.push_str(&format!(" --page-size {}", resp.page_size));
         }
@@ -208,7 +204,10 @@ async fn reserve(client: &Client, args: ReserveArgs) -> Result<()> {
     let mut had_error = false;
     for id in &args.file_ids {
         let path = format!("/api/files/{}/test-reservation", id);
-        match client.post_json::<serde_json::Value, _>(&path, &serde_json::json!({})).await {
+        match client
+            .post_json::<serde_json::Value, _>(&path, &serde_json::json!({}))
+            .await
+        {
             Ok(v) => {
                 if args.json {
                     json_out.push(v);
@@ -270,10 +269,7 @@ async fn unreserve(client: &Client, args: UnreserveArgs) -> Result<()> {
 }
 
 async fn summary(client: &Client, args: SummaryArgs) -> Result<()> {
-    let path = format!(
-        "/api/projects/{}/test-reservation-summary",
-        args.project_id
-    );
+    let path = format!("/api/projects/{}/test-reservation-summary", args.project_id);
     if args.json {
         let v: serde_json::Value = client.get_json(&path).await?;
         println!("{}", serde_json::to_string_pretty(&v)?);
