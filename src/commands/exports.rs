@@ -113,8 +113,27 @@ pub struct CreateArgs {
     #[arg(long, default_value_t = 42)]
     seed: i64,
     /// Train/validation/test ratios as a comma-separated triple summing to 1.
+    /// When `--use-reserved-test-files` is set, pass a *pair* (e.g.
+    /// `0.9,0.1`) — the third slot is implicitly 0 because the test split
+    /// is filled from reserved files only.
     #[arg(long, default_value = "0.8,0.1,0.1")]
     ratios: String,
+    /// Use the project's reserved files as the entire test split. The
+    /// non-reserved rows are split between train and validation only —
+    /// see docs/08-test-set-reservation.md. Omit to disable explicitly.
+    #[arg(
+        long = "use-reserved-test-files",
+        overrides_with = "no_use_reserved_test_files"
+    )]
+    use_reserved_test_files: bool,
+    /// Force-disable the reservation flow even if the project has
+    /// reserved files. Primarily for scripted exports that want the
+    /// classic 3-way ratio behaviour regardless of project state.
+    #[arg(
+        long = "no-use-reserved-test-files",
+        overrides_with = "use_reserved_test_files"
+    )]
+    no_use_reserved_test_files: bool,
     /// Print the new export row as raw JSON.
     #[arg(long)]
     json: bool,
@@ -232,6 +251,12 @@ struct CreateFilter<'a> {
     created_at_from: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     created_at_to: Option<&'a str>,
+    /// Mirrors the platform's `useReservedTestFiles` filter flag — when
+    /// set, the server pulls the test split from the project's reserved
+    /// files and snapshots their ids into the export `filter` for
+    /// reproducibility (docs/08-test-set-reservation.md §4).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    use_reserved_test_files: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -427,7 +452,19 @@ async fn create(client: &Client, args: CreateArgs) -> Result<()> {
         Some(args.labeller_ids.clone())
     };
 
-    let ratios = parse_ratios(&args.ratios)?;
+    // Reservation flag tri-state: explicit `--use-reserved-test-files`
+    // wins, explicit `--no-…` wins, otherwise we leave it `None` and
+    // the platform applies its default (which today is "off" — auto-on
+    // is a UI-only convenience driven by the summary endpoint).
+    let use_reserved = if args.use_reserved_test_files {
+        Some(true)
+    } else if args.no_use_reserved_test_files {
+        Some(false)
+    } else {
+        None
+    };
+    let reservation_on = use_reserved == Some(true);
+    let ratios = parse_ratios(&args.ratios, reservation_on)?;
 
     let body = CreateBody {
         name: &args.name,
@@ -439,6 +476,7 @@ async fn create(client: &Client, args: CreateArgs) -> Result<()> {
             labeller_ids,
             created_at_from: args.created_at_from.as_deref(),
             created_at_to: args.created_at_to.as_deref(),
+            use_reserved_test_files: use_reserved,
         },
         split_policy: CreateSplitPolicy {
             kind: &args.split,
@@ -671,11 +709,17 @@ fn resolve_adapt_inputs(args: &AdaptSmartTurnArgs) -> Result<(PathBuf, PathBuf)>
     Ok((manifest, clips))
 }
 
-fn parse_ratios(raw: &str) -> Result<[f64; 3]> {
+/// Parse `--ratios`. When `reservation_on` is true, accepts either a
+/// 2-tuple (`train,val`) — implicit test=0 — or a 3-tuple whose third
+/// slot is exactly 0. Anything else is rejected so the caller cannot
+/// silently waste a non-zero `test` ratio on the reservation flow.
+/// When `reservation_on` is false, requires the classic 3-tuple summing
+/// to 1.
+fn parse_ratios(raw: &str, reservation_on: bool) -> Result<[f64; 3]> {
     let parts: Vec<&str> = raw.split(',').map(|s| s.trim()).collect();
-    if parts.len() != 3 {
+    if !(parts.len() == 2 || parts.len() == 3) {
         return Err(anyhow!(
-            "--ratios expects three comma-separated numbers (got {raw:?})"
+            "--ratios expects two or three comma-separated numbers (got {raw:?})"
         ));
     }
     let nums: Vec<f64> = parts
@@ -685,6 +729,34 @@ fn parse_ratios(raw: &str) -> Result<[f64; 3]> {
                 .with_context(|| format!("parsing ratio {s:?}"))
         })
         .collect::<Result<Vec<_>>>()?;
+
+    if reservation_on {
+        let (train, val) = match nums.as_slice() {
+            [t, v] => (*t, *v),
+            [t, v, test] => {
+                if test.abs() > 1e-6 {
+                    return Err(anyhow!(
+                        "--ratios test slot must be 0 when --use-reserved-test-files is set (got {test})"
+                    ));
+                }
+                (*t, *v)
+            }
+            _ => unreachable!(),
+        };
+        let sum = train + val;
+        if (sum - 1.0).abs() > 1e-6 {
+            return Err(anyhow!(
+                "--ratios train+val must sum to 1.0 with --use-reserved-test-files (got {sum})"
+            ));
+        }
+        return Ok([train, val, 0.0]);
+    }
+
+    if nums.len() != 3 {
+        return Err(anyhow!(
+            "--ratios expects three comma-separated numbers without --use-reserved-test-files (got {raw:?})"
+        ));
+    }
     let sum: f64 = nums.iter().sum();
     if (sum - 1.0).abs() > 1e-6 {
         return Err(anyhow!("--ratios must sum to 1.0 (got {sum})"));
@@ -739,18 +811,42 @@ mod tests {
 
     #[test]
     fn ratios_accept_default() {
-        let r = parse_ratios("0.8,0.1,0.1").unwrap();
+        let r = parse_ratios("0.8,0.1,0.1", false).unwrap();
         assert_eq!(r, [0.8, 0.1, 0.1]);
     }
 
     #[test]
     fn ratios_reject_off_total() {
-        assert!(parse_ratios("0.5,0.5,0.5").is_err());
+        assert!(parse_ratios("0.5,0.5,0.5", false).is_err());
     }
 
     #[test]
-    fn ratios_reject_wrong_count() {
-        assert!(parse_ratios("0.5,0.5").is_err());
+    fn ratios_reject_two_tuple_without_reservation() {
+        assert!(parse_ratios("0.5,0.5", false).is_err());
+    }
+
+    #[test]
+    fn ratios_accept_two_tuple_with_reservation() {
+        let r = parse_ratios("0.9,0.1", true).unwrap();
+        assert_eq!(r, [0.9, 0.1, 0.0]);
+    }
+
+    #[test]
+    fn ratios_accept_three_tuple_with_zero_test_when_reserved() {
+        let r = parse_ratios("0.8,0.2,0", true).unwrap();
+        assert_eq!(r, [0.8, 0.2, 0.0]);
+    }
+
+    #[test]
+    fn ratios_reject_nonzero_test_when_reserved() {
+        // The third slot is meaningless when reservation is on — reject so
+        // a typo can't silently throw away a chunk of training data.
+        assert!(parse_ratios("0.7,0.1,0.2", true).is_err());
+    }
+
+    #[test]
+    fn ratios_reject_train_val_off_one_when_reserved() {
+        assert!(parse_ratios("0.5,0.4", true).is_err());
     }
 
     #[test]
