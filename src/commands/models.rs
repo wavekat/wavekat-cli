@@ -439,7 +439,9 @@ async fn push(client: &Client, args: PushArgs) -> Result<()> {
         if let Some(put_url) = upload.put_url.as_deref() {
             Client::put_presigned_bytes(put_url, art.bytes.clone()).await?;
         } else {
-            client.put_proxy_bytes(&upload.proxy_put_url, art.bytes.clone()).await?;
+            client
+                .put_proxy_bytes(&upload.proxy_put_url, art.bytes.clone())
+                .await?;
         }
         bar.add(art.bytes.len() as u64);
     }
@@ -453,11 +455,7 @@ async fn push(client: &Client, args: PushArgs) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&finalized)?);
         return Ok(());
     }
-    println!(
-        "{} {}",
-        style::bold("✅ model"),
-        style::dim(&finalized.id),
-    );
+    println!("{} {}", style::bold("✅ model"), style::dim(&finalized.id),);
     print_summary(&finalized);
     println!(
         "  {}: {}",
@@ -642,7 +640,10 @@ fn print_summary(m: &ModelRow) {
             (Some(lo), Some(hi)) => format!(" ({lo:.3}–{hi:.3} CI95)"),
             _ => String::new(),
         };
-        let ap = m.test_ap.map(|a| format!("  AP {a:.3}")).unwrap_or_default();
+        let ap = m
+            .test_ap
+            .map(|a| format!("  AP {a:.3}"))
+            .unwrap_or_default();
         println!("  {} {f:.3}{ci}{ap}", label("test F1:"));
     }
     if !m.artifacts.is_empty() {
