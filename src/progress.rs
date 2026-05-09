@@ -134,6 +134,13 @@ impl ProgressBar {
         self.state.current.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Advance the bar by `n` units. Used by byte-oriented progress
+    /// (e.g. `wk models push`) where each tick is "uploaded N bytes"
+    /// rather than "finished one item".
+    pub fn add(&self, n: u64) {
+        self.state.current.fetch_add(n, Ordering::Relaxed);
+    }
+
     /// Stop the bar, clear the live line, and return the elapsed time so
     /// the caller can fold it into their own "done" message instead of
     /// leaving a stale progress bar on screen.

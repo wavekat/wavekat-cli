@@ -54,6 +54,13 @@ impl Client {
         format!("{}{}", self.base_url, path)
     }
 
+    /// Base URL of the connected platform without the path. Used by
+    /// commands that print a clickable link in their done message
+    /// (e.g. `wk models push` echoes the model details URL).
+    pub fn base_url_for_display(&self) -> &str {
+        &self.base_url
+    }
+
     pub async fn get_json<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
         let url = self.url(path);
         let resp = self
@@ -84,6 +91,20 @@ impl Client {
             return Err(anyhow!("{} {}: {}", status.as_u16(), url, snippet));
         }
         Ok(())
+    }
+
+    /// POST with an empty body and decode the JSON response. Used by
+    /// `wk models push` to call `/finalize` (no body, but the server
+    /// returns the updated model row).
+    pub async fn post_empty_returning_json<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let url = self.url(path);
+        let resp = self
+            .inner
+            .post(&url)
+            .send()
+            .await
+            .with_context(|| format!("POST {url}"))?;
+        decode(url, resp).await
     }
 
     pub async fn get_json_query<T: DeserializeOwned, Q: Serialize + ?Sized>(
@@ -133,6 +154,57 @@ impl Client {
                 "{} {}: {}",
                 status.as_u16(),
                 url,
+                truncate(&text, 500)
+            ));
+        }
+        Ok(())
+    }
+
+    /// PUT a request body through the platform proxy upload route, with
+    /// the configured bearer / cookie auth attached. Used by
+    /// `wk models push` when the platform isn't configured with R2
+    /// access keys (e.g. local dev) — bytes flow through the Worker
+    /// instead of going direct to R2.
+    pub async fn put_proxy_bytes(&self, path: &str, body: Vec<u8>) -> Result<()> {
+        let url = self.url(path);
+        let resp = self
+            .inner
+            .put(&url)
+            .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+            .body(body)
+            .send()
+            .await
+            .with_context(|| format!("PUT {url}"))?;
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!(
+                "{} {}: {}",
+                status.as_u16(),
+                url,
+                truncate(&text, 500)
+            ));
+        }
+        Ok(())
+    }
+
+    /// PUT a request body to a presigned R2 URL. The URL embeds SigV4
+    /// auth in its query string, so we deliberately use a fresh
+    /// `reqwest::Client` without our own headers — adding `Authorization:
+    /// Bearer …` would make S3 reject the request.
+    pub async fn put_presigned_bytes(presigned_url: &str, body: Vec<u8>) -> Result<()> {
+        let resp = reqwest::Client::new()
+            .put(presigned_url)
+            .body(body)
+            .send()
+            .await
+            .with_context(|| format!("PUT {presigned_url}"))?;
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!(
+                "{} presigned PUT: {}",
+                status.as_u16(),
                 truncate(&text, 500)
             ));
         }

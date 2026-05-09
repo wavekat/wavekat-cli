@@ -6,6 +6,7 @@ pub mod files;
 pub mod login;
 pub mod logout;
 pub mod me;
+pub mod models;
 pub mod projects;
 pub mod update;
 pub mod version;

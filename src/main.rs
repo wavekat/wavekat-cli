@@ -60,6 +60,11 @@ enum Command {
         #[command(subcommand)]
         command: commands::exports::Cmd,
     },
+    /// Manage trained models (push, list, download)
+    Models {
+        #[command(subcommand)]
+        command: commands::models::Cmd,
+    },
     /// Manage project files (list, reserve / unreserve test set)
     Files {
         #[command(subcommand)]
@@ -83,6 +88,7 @@ async fn main() -> Result<()> {
         Command::Projects { command } => commands::projects::run(command).await,
         Command::Annotations { command } => commands::annotations::run(command).await,
         Command::Exports { command } => commands::exports::run(command).await,
+        Command::Models { command } => commands::models::run(command).await,
         Command::Files { command } => commands::files::run(command).await,
         Command::Version(args) => commands::version::run(args).await,
         Command::Update(args) => commands::update::run(args).await,
