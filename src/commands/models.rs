@@ -581,11 +581,11 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
     for m in &resp.models {
         let name = truncate(&m.name, 28);
         let recipe = truncate(&m.recipe_name, 14);
+        let val = fmt_metric(m.val_f1);
+        let test = fmt_metric(m.test_f1);
         println!(
-            "{}  {name:<28}  {recipe:<14}  {}  {}  {}  {}",
+            "{}  {name:<28}  {recipe:<14}  {val:<7}  {test:<7}  {}  {}",
             style::dim(&format!("{:<38}", m.id)),
-            format!("{:<7}", fmt_metric(m.val_f1)),
-            format!("{:<7}", fmt_metric(m.test_f1)),
             style::bold(&format!("{:<10}", m.status)),
             style::dim(&m.created_at),
         );
