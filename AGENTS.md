@@ -69,6 +69,9 @@ and the layout is not stable.
 | `wk files reserve <id> [<id>…] --json`      | array of `{id, …}` rows (one per file) on success            |
 | `wk files unreserve <id> [<id>…] --json`    | array of `{id, ok\|error}` rows                              |
 | `wk files summary <project-id> --json`      | `{fileCount, annotationCount, labelledSeconds}`              |
+| `wk models list <project-id> --json`        | `models`, `page`, `pageSize`, `total`, `totalPages`          |
+| `wk models show <id> --json`                | full model row (lineage, metrics, artifacts list)            |
+| `wk models push … --json`                   | the finalized model row (or existing row if idempotent)      |
 
 Local file producers (`wk exports download`, `wk exports adapt smart-turn`)
 write files to disk and print the output path on stdout. Progress goes
@@ -147,6 +150,37 @@ wk exports adapt smart-turn \
 until [ "$(wk exports show "$EXPORT_ID" --json | jq -r .status)" = "ready" ]; do
   sleep 5
 done
+```
+
+### Push a trained model after a lab run
+
+```sh
+# Drop the FP32 + INT8 ONNX checkpoints and the run's results.json
+# into the registry. The push is idempotent on
+# (training-export, recipe, sha256(model.onnx)) — re-running with the
+# same files exits 0 without re-uploading.
+wk models push \
+  --project "$PROJECT_ID" \
+  --training-export "$EXPORT_ID" \
+  --recipe specaugment \
+  --results ./checkpoints/specaugment/results.json \
+  --artifact ./checkpoints/specaugment/onnx/model.onnx \
+  --artifact ./checkpoints/specaugment/onnx/model.int8.onnx \
+  --name "smart-turn-zh 0504-specaug" \
+  --json | jq -r .id
+```
+
+### List every model trained on a given export
+
+```sh
+wk models list "$PROJECT_ID" --training-export "$EXPORT_ID" --json \
+  | jq '.models[] | {id, name, recipeName, valF1, testF1}'
+```
+
+### Download a specific INT8 ONNX
+
+```sh
+wk models download "$MODEL_ID" --artifact model.int8.onnx --out ./
 ```
 
 ### Find every annotation that needs review
