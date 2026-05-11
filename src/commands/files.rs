@@ -100,6 +100,10 @@ struct FileRow {
     test_reserved_at: Option<String>,
     #[serde(default)]
     annotation_count: i64,
+    #[serde(default)]
+    sample_rate: Option<i64>,
+    #[serde(default)]
+    labelled_seconds: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -153,26 +157,39 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         return Ok(());
     }
     println!(
-        "{}  {}  {}  {}  {}",
+        "{}  {}  {}  {}  {}  {}  {}",
         style::bold(&format!("{:<38}", "ID")),
-        style::bold(&format!("{:<32}", "NAME")),
-        style::bold(&format!("{:<10}", "DURATION")),
-        style::bold(&format!("{:<8}", "ANNOTS")),
+        style::bold(&format!("{:<28}", "NAME")),
+        style::bold(&format!("{:>9}", "DURATION")),
+        style::bold(&format!("{:>5}", "SR")),
+        style::bold(&format!("{:>6}", "ANNOTS")),
+        style::bold(&format!("{:>9}", "LABELLED")),
         style::bold("TEST"),
     );
     for f in &resp.files {
-        let name = truncate(&f.name, 32);
+        let name = truncate(&f.name, 28);
         let dur = format!("{:.1}s", f.duration_sec);
+        let sr = f
+            .sample_rate
+            .map(|hz| format!("{:.0}k", hz as f64 / 1000.0))
+            .unwrap_or_else(|| "—".into());
+        let labelled = f
+            .labelled_seconds
+            .filter(|s| *s > 0.0)
+            .map(|s| format!("{s:.1}s"))
+            .unwrap_or_else(|| "—".into());
         let test_cell = if f.test_reserved_at.is_some() {
             style::yellow("reserved")
         } else {
             style::dim("—")
         };
         println!(
-            "{}  {name:<32}  {}  {}  {}",
+            "{}  {name:<28}  {}  {}  {}  {}  {}",
             style::dim(&format!("{:<38}", f.id)),
-            style::dim(&format!("{dur:<10}")),
-            style::dim(&format!("{:<8}", f.annotation_count)),
+            style::dim(&format!("{dur:>9}")),
+            style::dim(&format!("{sr:>5}")),
+            style::dim(&format!("{:>6}", f.annotation_count)),
+            style::dim(&format!("{labelled:>9}")),
             test_cell,
         );
     }

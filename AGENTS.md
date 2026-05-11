@@ -77,6 +77,17 @@ Local file producers (`wk exports download`, `wk exports adapt smart-turn`)
 write files to disk and print the output path on stdout. Progress goes
 to stderr.
 
+`--json` is a pass-through — every field the platform returns on a list
+row is visible. Useful fields the human table also surfaces (so an agent
+can target the same signal):
+
+| List                       | Per-row fields worth filtering on                                                                   |
+|----------------------------|-----------------------------------------------------------------------------------------------------|
+| `projects list`            | `myRoleInProject`, `filesCount`, `annotationsCount`, `annotationsReviewedCount`, `updatedAt`        |
+| `files list`               | `annotationCount`, `labelCounts` (per-key), `labelledSeconds`, `sampleRate`, `testReservedAt`       |
+| `exports list`             | `status`, `clipCount`, `clipsTotal` / `clipsWritten` (writer progress), `totalBytes`, `splitCounts` |
+| `models list`              | `valF1`, `valThreshold`, `testF1`, `testF1Ci95Low/High`, `testAp`, `createdByLogin`, `status`       |
+
 ## Exit codes
 
 - `0` — success

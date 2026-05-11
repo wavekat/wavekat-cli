@@ -38,7 +38,16 @@ pub struct ShowArgs {
 struct Project {
     id: String,
     name: String,
-    created_at: String,
+    #[serde(default)]
+    updated_at: Option<String>,
+    #[serde(default)]
+    my_role_in_project: Option<String>,
+    #[serde(default)]
+    files_count: Option<i64>,
+    #[serde(default)]
+    annotations_count: Option<i64>,
+    #[serde(default)]
+    annotations_reviewed_count: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -82,20 +91,39 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         return Ok(());
     }
     println!(
-        "{}  {}  {}",
+        "{}  {}  {}  {}  {}  {}  {}",
         style::bold(&format!("{:<38}", "ID")),
-        style::bold(&format!("{:<28}", "NAME")),
-        style::bold("CREATED"),
+        style::bold(&format!("{:<22}", "NAME")),
+        style::bold(&format!("{:<8}", "ROLE")),
+        style::bold(&format!("{:>5}", "FILES")),
+        style::bold(&format!("{:>7}", "RECORDS")),
+        style::bold(&format!("{:>13}", "REVIEWED")),
+        style::bold("UPDATED"),
     );
     for p in &resp.projects {
         // Pad to fixed widths in raw bytes first, then style — ANSI escape
         // codes count as bytes (not columns) inside Rust's `{:<N}`, so
         // styling has to wrap an already-padded cell or columns drift.
-        let name = truncate(&p.name, 28);
+        let name = truncate(&p.name, 22);
+        let role = p.my_role_in_project.as_deref().unwrap_or("—");
+        let files = p
+            .files_count
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "—".into());
+        let records = p
+            .annotations_count
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "—".into());
+        let reviewed = format_reviewed(p.annotations_reviewed_count, p.annotations_count);
+        let updated = p.updated_at.as_deref().unwrap_or("—");
         println!(
-            "{}  {name:<28}  {}",
+            "{}  {name:<22}  {}  {}  {}  {}  {}",
             style::dim(&format!("{:<38}", p.id)),
-            style::dim(&p.created_at),
+            style::cyan(&format!("{role:<8}")),
+            style::dim(&format!("{files:>5}")),
+            style::dim(&format!("{records:>7}")),
+            style::dim(&format!("{reviewed:>13}")),
+            style::dim(updated),
         );
     }
     println!(
@@ -138,13 +166,58 @@ async fn show(client: &Client, args: ShowArgs) -> Result<()> {
     }
     println!("{} {}", label("created:"), s("createdAt"));
     println!("{} {}", label("updated:"), s("updatedAt"));
-    if let Some(ls) = v.get("activeLabelSetId").and_then(|x| x.as_str()) {
-        println!("{} {ls}", label("label set:"));
+    let label_set_label = match (
+        v.get("activeLabelSetName").and_then(|x| x.as_str()),
+        v.get("activeLabelSetId").and_then(|x| x.as_str()),
+    ) {
+        (Some(name), Some(id)) => Some(format!("{name} ({id})")),
+        (Some(name), None) => Some(name.to_string()),
+        (None, Some(id)) => Some(id.to_string()),
+        (None, None) => None,
+    };
+    if let Some(ls) = label_set_label {
+        println!("{} {}", label("label set:"), ls);
     }
-    if let Some(role) = v.get("role").and_then(|x| x.as_str()) {
+    let role = v
+        .get("myRoleInProject")
+        .or_else(|| v.get("role"))
+        .and_then(|x| x.as_str());
+    if let Some(role) = role {
         println!("{} {}", label("your role:"), style::cyan(role));
     }
+    if let Some(n) = v.get("filesCount").and_then(|x| x.as_i64()) {
+        println!("{} {n}", label("files:"));
+    }
+    let records = v.get("annotationsCount").and_then(|x| x.as_i64());
+    let reviewed = v.get("annotationsReviewedCount").and_then(|x| x.as_i64());
+    if let Some(total) = records {
+        let suffix = match reviewed {
+            Some(r) if total > 0 => {
+                let pct = (r as f64 / total as f64 * 100.0).round() as i64;
+                format!("  ({r} reviewed, {pct}%)")
+            }
+            Some(r) => format!("  ({r} reviewed)"),
+            None => String::new(),
+        };
+        println!("{} {total}{suffix}", label("records:"));
+    }
     Ok(())
+}
+
+/// Render the "reviewed" cell as `<reviewed> (NN%)` when both reviewed
+/// and total are known. The total itself lives in the RECORDS column,
+/// so we drop it here to keep the column narrow. Falls back to em-dash
+/// when nothing's known.
+fn format_reviewed(reviewed: Option<i64>, total: Option<i64>) -> String {
+    match (reviewed, total) {
+        (Some(r), Some(t)) if t > 0 => {
+            let pct = (r as f64 / t as f64 * 100.0).round() as i64;
+            format!("{r} ({pct}%)")
+        }
+        (Some(r), Some(_)) => format!("{r}"),
+        (Some(r), None) => r.to_string(),
+        _ => "—".to_string(),
+    }
 }
 
 fn truncate(s: &str, n: usize) -> String {
@@ -165,6 +238,16 @@ mod tests {
     fn truncate_passes_short_strings() {
         assert_eq!(truncate("hi", 28), "hi");
         assert_eq!(truncate("", 5), "");
+    }
+
+    #[test]
+    fn format_reviewed_handles_known_pair() {
+        assert_eq!(format_reviewed(Some(82), Some(100)), "82 (82%)");
+        assert_eq!(format_reviewed(Some(2868), Some(2868)), "2868 (100%)");
+        assert_eq!(format_reviewed(Some(0), Some(0)), "0");
+        assert_eq!(format_reviewed(None, Some(10)), "—");
+        assert_eq!(format_reviewed(Some(5), None), "5");
+        assert_eq!(format_reviewed(None, None), "—");
     }
 
     #[test]
