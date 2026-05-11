@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.17](https://github.com/wavekat/wavekat-cli/compare/v0.0.16...v0.0.17) - 2026-05-11
+
+### Added
+
+- *(list)* surface UI-equivalent signal in list/show tables ([#36](https://github.com/wavekat/wavekat-cli/pull/36))
+
 ## [0.0.16](https://github.com/wavekat/wavekat-cli/compare/v0.0.15...v0.0.16) - 2026-05-10
 
 ### Added
