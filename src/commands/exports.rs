@@ -182,6 +182,17 @@ pub struct AdaptSmartTurnArgs {
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct SplitCounts {
+    #[serde(default)]
+    train: Option<i64>,
+    #[serde(default)]
+    val: Option<i64>,
+    #[serde(default)]
+    test: Option<i64>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct ExportRow {
     id: String,
     project_id: String,
@@ -198,6 +209,17 @@ struct ExportRow {
     manifest_sha256: Option<String>,
     clip_count: Option<i64>,
     total_bytes: Option<i64>,
+    /// Writer progress: total annotations resolved by the filter at
+    /// submit time. Null for legacy rows. Used in the list view's
+    /// CLIPS cell while the export is still being written.
+    #[serde(default)]
+    clips_total: Option<i64>,
+    #[serde(default)]
+    clips_written: Option<i64>,
+    /// Per-split counts (train/val/test). Populated once the export is
+    /// `ready`. Mirrors the platform UI's tooltip on the clips cell.
+    #[serde(default)]
+    split_counts: Option<SplitCounts>,
     created_by: i64,
     created_by_login: Option<String>,
     created_at: String,
@@ -310,24 +332,39 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
     // needs to copy-paste them. Truncating to 8 chars (as we do for
     // annotations, where the id is just a row marker) defeats that.
     println!(
-        "{}  {}  {}  {}  {}",
+        "{}  {}  {}  {}  {}  {}  {}",
         style::bold(&format!("{:<38}", "ID")),
-        style::bold(&format!("{:<32}", "NAME")),
+        style::bold(&format!("{:<26}", "NAME")),
         style::bold(&format!("{:<10}", "STATUS")),
-        style::bold(&format!("{:<8}", "CLIPS")),
+        style::bold(&format!("{:>11}", "CLIPS")),
+        style::bold(&format!("{:>8}", "SIZE")),
+        style::bold(&format!("{:<14}", "BY")),
         style::bold("CREATED"),
     );
     for e in &resp.exports {
-        let name = truncate(&e.name, 32);
-        let clips = e
-            .clip_count
-            .map(|n| n.to_string())
+        let name = truncate(&e.name, 26);
+        // CLIPS: when the export is still being written, prefer the
+        // writer's progress (`clipsWritten / clipsTotal`) — that's
+        // what the platform UI shows so the user can tell whether
+        // a non-`ready` row is stuck or just busy.
+        let clips = match (e.clips_written, e.clips_total, e.clip_count) {
+            (Some(done), Some(total), _) if e.status != "ready" => format!("{done}/{total}"),
+            (_, _, Some(n)) => n.to_string(),
+            _ => "—".to_string(),
+        };
+        let size = e
+            .total_bytes
+            .map(human_bytes)
             .unwrap_or_else(|| "—".to_string());
+        let by = e.created_by_login.as_deref().unwrap_or("—");
+        let by_cell = truncate(by, 14);
         println!(
-            "{}  {name:<32}  {}  {}  {}",
+            "{}  {name:<26}  {}  {}  {}  {}  {}",
             style::dim(&format!("{:<38}", e.id)),
             style::bold(&format!("{:<10}", colour_status_text(&e.status))),
-            style::dim(&format!("{clips:<8}")),
+            style::dim(&format!("{clips:>11}")),
+            style::dim(&format!("{size:>8}")),
+            style::dim(&format!("{by_cell:<14}")),
             style::dim(&e.created_at),
         );
         if let Some(err) = e.error_message.as_deref() {
@@ -384,7 +421,23 @@ async fn show(client: &Client, args: ShowArgs) -> Result<()> {
         colour_status(v.get("status").and_then(|x| x.as_str()).unwrap_or("-")),
     );
     if let Some(n) = v.get("clipCount").and_then(|x| x.as_i64()) {
-        println!("{} {n}", label("clips:"));
+        let suffix = v
+            .get("splitCounts")
+            .and_then(|s| {
+                let train = s.get("train").and_then(|x| x.as_i64())?;
+                let val = s.get("val").and_then(|x| x.as_i64())?;
+                let test = s.get("test").and_then(|x| x.as_i64())?;
+                Some(format!("  (train {train} · val {val} · test {test})"))
+            })
+            .unwrap_or_default();
+        println!("{} {n}{suffix}", label("clips:"));
+    } else if let (Some(written), Some(total)) = (
+        v.get("clipsWritten").and_then(|x| x.as_i64()),
+        v.get("clipsTotal").and_then(|x| x.as_i64()),
+    ) {
+        // No final clipCount yet but the writer has a progress count —
+        // show that so a stuck-vs-busy run is visible from `show`.
+        println!("{} {written}/{total}", label("progress:"));
     }
     if let Some(b) = v.get("totalBytes").and_then(|x| x.as_i64()) {
         println!("{} {}", label("bytes:"), human_bytes(b));

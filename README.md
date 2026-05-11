@@ -27,10 +27,10 @@ with `--help` to see all flags, or jump to the [Examples](#examples).
 |---------|---------------|
 | `wk login` / `wk logout`                          | sign in via your browser, or sign out |
 | `wk me`                                           | who you're signed in as |
-| `wk projects list`                                | paginated table of projects you can see |
+| `wk projects list`                                | projects you can see, with your role, file/record counts, and review progress |
 | `wk projects show <id>`                           | details for one project (`--json` for raw) |
 | `wk annotations list <project-id>`                | paginated annotations with inline ASR text |
-| `wk exports list <project-id>`                    | exports for a project (status, clip count) |
+| `wk exports list <project-id>`                    | exports for a project (status, clip count, size, owner, writer progress) |
 | `wk exports show <export-id>`                     | one export's filter, split policy, counts |
 | `wk exports create <project-id> --name …`         | snapshot the current label set into a frozen export |
 | `wk exports download <export-id>`                 | fetch `manifest.jsonl` + every clip into `./<id>/` |

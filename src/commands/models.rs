@@ -569,22 +569,27 @@ async fn list(client: &Client, args: ListArgs) -> Result<()> {
         return Ok(());
     }
     println!(
-        "{}  {}  {}  {}  {}  {}  {}",
+        "{}  {}  {}  {}  {}  {}  {}  {}  {}",
         style::bold(&format!("{:<38}", "ID")),
-        style::bold(&format!("{:<28}", "NAME")),
-        style::bold(&format!("{:<14}", "RECIPE")),
-        style::bold(&format!("{:<7}", "VAL F1")),
-        style::bold(&format!("{:<7}", "TST F1")),
+        style::bold(&format!("{:<22}", "NAME")),
+        style::bold(&format!("{:<12}", "RECIPE")),
+        style::bold(&format!("{:>6}", "VAL F1")),
+        style::bold(&format!("{:>6}", "TST F1")),
+        style::bold(&format!("{:>6}", "AP")),
         style::bold(&format!("{:<10}", "STATUS")),
+        style::bold(&format!("{:<12}", "BY")),
         style::bold("CREATED"),
     );
     for m in &resp.models {
-        let name = truncate(&m.name, 28);
-        let recipe = truncate(&m.recipe_name, 14);
+        let name = truncate_chars(&m.name, 22);
+        let recipe = truncate_chars(&m.recipe_name, 12);
         let val = fmt_metric(m.val_f1);
         let test = fmt_metric(m.test_f1);
+        let ap = fmt_metric(m.test_ap);
+        let by = m.created_by_login.as_deref().unwrap_or("—");
+        let by_cell = truncate_chars(by, 12);
         println!(
-            "{}  {name:<28}  {recipe:<14}  {val:<7}  {test:<7}  {}  {}",
+            "{}  {name:<22}  {recipe:<12}  {val:>6}  {test:>6}  {ap:>6}  {}  {by_cell:<12}  {}",
             style::dim(&format!("{:<38}", m.id)),
             style::bold(&format!("{:<10}", m.status)),
             style::dim(&m.created_at),
@@ -757,11 +762,16 @@ async fn delete(client: &Client, args: DeleteArgs) -> Result<()> {
 
 // ── helpers ────────────────────────────────────────────────────────────
 
-fn truncate(s: &str, n: usize) -> &str {
-    if s.len() > n {
-        &s[..n]
+/// Char-safe truncation that returns a `String`. Used for table cells
+/// where the field may contain non-ASCII (e.g. user-supplied model
+/// names) and where ellipsis is preferred over a hard cut.
+fn truncate_chars(s: &str, n: usize) -> String {
+    if s.chars().count() > n {
+        let mut out: String = s.chars().take(n.saturating_sub(1)).collect();
+        out.push('…');
+        out
     } else {
-        s
+        s.to_string()
     }
 }
 
