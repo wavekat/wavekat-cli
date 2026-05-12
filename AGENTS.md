@@ -11,6 +11,8 @@ You can also read this guide directly from an installed binary:
 wk agents
 ```
 
+Human-facing docs live at <https://wavekat.com/docs/cli/>.
+
 ## Install
 
 ```sh

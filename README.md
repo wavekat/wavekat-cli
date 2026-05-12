@@ -10,6 +10,8 @@ Command-line client (`wk`) for the [WaveKat platform](https://platform.wavekat.c
 Sign in once with your browser and inspect projects and annotations from the
 terminal.
 
+Full docs: <https://wavekat.com/docs/cli/>
+
 ## Quick start
 
 ```sh
