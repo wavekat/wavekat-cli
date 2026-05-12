@@ -38,6 +38,19 @@ jobs:
             gh workflow run release.yml -f tag="$tag"
           done
 
+      - name: Trigger wavekat.com docs rebuild
+        if: steps.release-plz.outputs.releases_created == 'true'
+        env:
+          CF_PAGES_DEPLOY_HOOK: ${{ secrets.CF_PAGES_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_PAGES_DEPLOY_HOOK:-}" ]; then
+            echo "CF_PAGES_DEPLOY_HOOK not set — skipping wavekat.com rebuild."
+            exit 0
+          fi
+          curl -fsS -X POST "$CF_PAGES_DEPLOY_HOOK" > /dev/null
+          echo "Triggered wavekat.com rebuild."
+
   release-plz-pr:
     needs: release-plz-release
     if: always()
