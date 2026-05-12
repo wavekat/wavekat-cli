@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.19](https://github.com/wavekat/wavekat-cli/compare/v0.0.18...v0.0.19) - 2026-05-12
+
+### Other
+
+- trigger wavekat.com rebuild on release ([#41](https://github.com/wavekat/wavekat-cli/pull/41))
+
 ## [0.0.18](https://github.com/wavekat/wavekat-cli/compare/v0.0.17...v0.0.18) - 2026-05-12
 
 ### Other
