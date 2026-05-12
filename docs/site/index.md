@@ -13,18 +13,17 @@ order: 1
 | Command | What it shows |
 |---------|---------------|
 | `wk login` / `wk logout`              | Sign in via your browser, or sign out |
-| `wk me`                               | Who you're signed in as |
-| `wk projects list`                    | Paginated table of projects you can see |
-| `wk projects show <id>`               | Details for one project |
+| `wk projects list`                    | Projects you can see, with role, counts, and review progress |
 | `wk annotations list <project-id>`    | Paginated annotations with inline ASR text |
-| `wk exports list <project-id>`        | Exports for a project |
-| `wk exports show <export-id>`         | Filter, split policy, counts for one export |
 | `wk exports create <project-id>`      | Snapshot the current label set into a frozen export |
 | `wk exports download <export-id>`     | Fetch manifest + every clip |
-| `wk exports delete <export-id>`       | Soft-delete an export |
 | `wk exports adapt smart-turn …`       | Convert a downloaded export into HF `datasets` Parquet shards |
+| `wk models list <project-id>`         | Models trained in a project (lineage, metrics, status) |
+| `wk models push …`                    | Register a trained model + upload its artifacts |
 
 Every list command supports `--page` / `--page-size` and prints a ready-to-paste `Next:` line when more pages exist. Add `--json` to any command for machine-readable output.
+
+This is the highlight reel — see [Reference](reference.md) for the full surface (files, model downloads, self-update, etc.), or just run `wk --help`, `wk <group> --help`, or `wk <group> <command> --help` against the binary. Clap-generated help is the authoritative source.
 
 Supported on macOS (Apple Silicon + Intel) and Linux (x86_64 + aarch64).
 

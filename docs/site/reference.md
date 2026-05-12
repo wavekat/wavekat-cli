@@ -40,15 +40,38 @@ Each command maps to a single platform endpoint:
 | `wk login`                          | Loopback OAuth + `GET /api/me` |
 | `wk logout`                         | `POST /api/auth/cli/tokens/revoke-current` |
 | `wk me`                             | `GET /api/me` |
+| `wk version`                        | Local binary + `GET /api/health` |
+| `wk update`                         | `GET /repos/wavekat/wavekat-cli/releases/latest` (GitHub) + re-runs `install.sh` |
+| `wk agents`                         | Local-only; prints the bundled `AGENTS.md` |
 | `wk projects list`                  | `GET /api/projects` |
 | `wk projects show <id>`             | `GET /api/projects/{id}` |
 | `wk annotations list <project-id>`  | `GET /api/projects/{id}/annotations` |
+| `wk files list <project-id>`        | `GET /api/projects/{id}/files` |
+| `wk files reserve <id> [<id>…]`     | `POST /api/files/{id}/test-reservation` (one call per id) |
+| `wk files unreserve <id> [<id>…]`   | `DELETE /api/files/{id}/test-reservation` (one call per id) |
+| `wk files summary <project-id>`     | `GET /api/projects/{id}/files/summary` |
 | `wk exports list <project-id>`      | `GET /api/projects/{id}/exports` |
 | `wk exports show <export-id>`       | `GET /api/exports/{id}` |
 | `wk exports create <project-id>`    | `POST /api/projects/{id}/exports` |
 | `wk exports download <export-id>`   | `GET /api/exports/{id}/manifest` + per-clip `GET /api/exports/{id}/clips/{annotation-id}` |
 | `wk exports delete <export-id>`     | `DELETE /api/exports/{id}` |
 | `wk exports adapt smart-turn`       | Local-only; reads a downloaded snapshot |
+| `wk models list <project-id>`       | `GET /api/projects/{id}/models` |
+| `wk models show <model-id>`         | `GET /api/models/{id}` |
+| `wk models push …`                  | `POST /api/projects/{id}/models` + artifact upload |
+| `wk models download <model-id>`     | `GET /api/models/{id}/artifacts/{name}` |
+
+## Discovering commands
+
+This table is a snapshot; the binary itself is authoritative. Every subcommand has self-describing help via clap:
+
+```sh
+wk --help                   # top-level groups
+wk exports --help           # one group
+wk exports create --help    # all flags, types, defaults
+```
+
+When in doubt, run `--help` rather than guessing.
 
 ## Credentials file
 
