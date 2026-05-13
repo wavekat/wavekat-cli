@@ -29,7 +29,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::time::Duration;
 
 use crate::client::Client;
-use crate::config::{self, AuthConfig};
+use crate::config;
 use crate::style;
 
 pub const DEFAULT_BASE_URL: &str = "https://platform.wavekat.com";
@@ -74,11 +74,12 @@ pub async fn run(args: Args) -> Result<()> {
         bail!("got an empty token from the platform");
     }
 
-    let cfg = AuthConfig {
-        base_url,
-        token: Some(token),
-        session_cookie: None,
-    };
+    // Merge into the existing config so we preserve `install_id` and
+    // any telemetry preference across re-logins.
+    let mut cfg = config::load_or_default();
+    cfg.base_url = base_url;
+    cfg.token = Some(token);
+    cfg.session_cookie = None;
 
     // Verify against /api/me before persisting — keeps a typo or a
     // half-broken handshake from poisoning the saved config.

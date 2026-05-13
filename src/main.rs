@@ -7,6 +7,7 @@ mod commands;
 mod config;
 mod progress;
 mod style;
+mod telemetry;
 
 // Both `-V` and `--version` print the same string — that matches what
 // `rustc -V` / `cargo -V` actually do, despite clap's default of
@@ -21,6 +22,36 @@ const VERSION: &str = concat!(
     env!("CARGO_PKG_REPOSITORY"),
 );
 
+// clap has no first-class way to group subcommands under headings in
+// the top-level help, so we render the command list ourselves via
+// `help_template` and replace clap's default `{subcommands}` block.
+// Keep this in sync with the `Command` enum below.
+const HELP_TEMPLATE: &str = "\
+{about-with-newline}
+{usage-heading} {usage}
+
+Account:
+  login        Authenticate against a WaveKat platform instance
+  logout       Forget stored credentials
+  me           Show the currently signed-in user (`GET /api/me`)
+
+Resources:
+  projects     Manage projects
+  annotations  Manage annotations
+  exports      Manage dataset exports
+  models       Manage trained models (push, list, download)
+  files        Manage project files (list, reserve / unreserve test set)
+
+CLI:
+  config       Read or change persisted CLI preferences (telemetry, …)
+  version      Print the local CLI version and probe the platform's `/api/health`
+  update       Replace this binary with the latest release (or `--check` to peek)
+  agents       Print the bundled AGENTS.md guide for AI agents using `wk`
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+{options}{after-help}";
+
 #[derive(Parser)]
 #[command(
     name = "wk",
@@ -30,7 +61,8 @@ const VERSION: &str = concat!(
                   Run `wk login` to authenticate. Credentials are stored under your platform \
                   config dir (e.g. ~/.config/wavekat/auth.json on Linux/macOS).\n\n\
                   Run `wk update` to upgrade in place, or `wk agents` for the AI-agent \
-                  integration guide (also at https://github.com/wavekat/wavekat-cli/blob/main/AGENTS.md)."
+                  integration guide (also at https://github.com/wavekat/wavekat-cli/blob/main/AGENTS.md).",
+    help_template = HELP_TEMPLATE,
 )]
 struct Cli {
     #[command(subcommand)]
@@ -70,6 +102,11 @@ enum Command {
         #[command(subcommand)]
         command: commands::files::Cmd,
     },
+    /// Read or change persisted CLI preferences (telemetry, …)
+    Config {
+        #[command(subcommand)]
+        command: commands::config::Cmd,
+    },
     /// Print the local CLI version and probe the platform's `/api/health`
     Version(commands::version::Args),
     /// Replace this binary with the latest release (or `--check` to peek)
@@ -80,8 +117,28 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Telemetry must be initialized before anything fallible so a
+    // panic during parsing still gets captured. The guard's `Drop`
+    // flushes pending events on exit (with a short timeout).
+    let _telemetry = telemetry::init();
+
     let cli = Cli::parse();
-    match cli.command {
+    let command_name = command_name(&cli.command);
+
+    // First-run notice goes to stderr after parsing succeeded —
+    // before any command output — so it can't garble JSON streams.
+    telemetry::maybe_print_first_run_notice();
+
+    let started = std::time::Instant::now();
+    let result = dispatch(cli.command).await;
+    if let Err(err) = &result {
+        telemetry::report_error(command_name, started.elapsed(), err);
+    }
+    result
+}
+
+async fn dispatch(cmd: Command) -> Result<()> {
+    match cmd {
         Command::Login(args) => commands::login::run(args).await,
         Command::Logout => commands::logout::run().await,
         Command::Me => commands::me::run().await,
@@ -90,8 +147,28 @@ async fn main() -> Result<()> {
         Command::Exports { command } => commands::exports::run(command).await,
         Command::Models { command } => commands::models::run(command).await,
         Command::Files { command } => commands::files::run(command).await,
+        Command::Config { command } => commands::config::run(command).await,
         Command::Version(args) => commands::version::run(args).await,
         Command::Update(args) => commands::update::run(args).await,
         Command::Agents => commands::agents::run().await,
+    }
+}
+
+/// Static string for the `cli.command` tag — keeps the cardinality
+/// fixed (no argv, no flag values) so Sentry can group cleanly.
+fn command_name(cmd: &Command) -> &'static str {
+    match cmd {
+        Command::Login(_) => "login",
+        Command::Logout => "logout",
+        Command::Me => "me",
+        Command::Projects { .. } => "projects",
+        Command::Annotations { .. } => "annotations",
+        Command::Exports { .. } => "exports",
+        Command::Models { .. } => "models",
+        Command::Files { .. } => "files",
+        Command::Config { .. } => "config",
+        Command::Version(_) => "version",
+        Command::Update(_) => "update",
+        Command::Agents => "agents",
     }
 }

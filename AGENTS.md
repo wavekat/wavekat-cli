@@ -253,6 +253,14 @@ wk exports create "$PROJECT_ID" \
   WAV before landing in the parquet. A clip that won't decode aborts
   the run with the failing path in the error — agents can treat such
   errors as a manifest/clip integrity issue, not an adapter bug.
+- **Crash reporting is on by default** in the shipped binary. The CLI
+  sends anonymous error events (version, OS, subcommand, templated
+  endpoint, error category) to Sentry. Request bodies, response
+  bodies, file paths, tokens, and argv values are never sent — see
+  the scrubber in `src/telemetry.rs`. Disable for a run with
+  `WK_TELEMETRY=0`, or persistently with `wk config telemetry off`.
+  Agents running in a CI sandbox where you don't want any network
+  side effect beyond the platform call should set `WK_TELEMETRY=0`.
 
 ## Reporting problems
 

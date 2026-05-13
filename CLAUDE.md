@@ -11,9 +11,12 @@ stay in sync. When you add a new subcommand, rename a flag, change a
 declaring the change done:
 
 1. **`src/main.rs`** — register/unregister the variant in the `Command`
-   enum, add the dispatch arm in `main()`, and update the top-level
-   `long_about` if the change affects the bootstrap story (auth,
-   self-update, agents guide).
+   enum, add the dispatch arm in `main()`, update `command_name()` for
+   telemetry, and update the top-level `long_about` if the change
+   affects the bootstrap story (auth, self-update, agents guide). The
+   `wk --help` listing is rendered from a hand-written `HELP_TEMPLATE`
+   (clap can't group subcommands itself), so add the new command under
+   the right heading (Account / Resources / CLI) there too.
 2. **`src/commands.rs`** — add/remove the `pub mod` line.
 3. **`src/commands/<name>.rs`** — the command itself. Every read
    command should support `--json` (see existing commands for the
