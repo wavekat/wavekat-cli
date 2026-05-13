@@ -72,9 +72,7 @@ fn status() -> Result<()> {
         println!("  WK_TELEMETRY env: (unset)");
     }
     if !cfg!(feature = "telemetry") {
-        println!(
-            "  build:            telemetry feature OFF — this binary will not send events"
-        );
+        println!("  build:            telemetry feature OFF — this binary will not send events");
     }
     Ok(())
 }
