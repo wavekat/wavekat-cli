@@ -52,8 +52,20 @@ jobs:
           archive: $bin-$tag-$target
           tar: unix
           checksum: sha256
+          # Turn on the crash-reporting SDK in shipped binaries. Source
+          # builds via `cargo build` continue to compile without it and
+          # are network-silent by default. See
+          # docs/01-crash-and-error-reporting.md.
+          features: telemetry
           ref: refs/tags/${{ inputs.tag }}
           token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          # Read at compile time by `option_env!("WK_SENTRY_DSN")` in
+          # src/telemetry.rs. If unset (e.g. forks), the SDK initializes
+          # but stays inert. The DSN is not secret per Sentry's docs,
+          # but we keep it out of source so spam events from random
+          # `cargo build`s don't burn the project's quota.
+          WK_SENTRY_DSN: ${{ secrets.WK_SENTRY_DSN }}
 
   installer:
     name: Upload install.sh

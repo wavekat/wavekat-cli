@@ -38,6 +38,7 @@ with `--help` to see all flags, or jump to the [Examples](#examples).
 | `wk exports download <export-id>`                 | fetch `manifest.jsonl` + every clip into `./<id>/` |
 | `wk exports delete <export-id> --yes`             | soft-delete an export (cleanup sweep purges later) |
 | `wk exports adapt smart-turn …`                   | convert a downloaded export into HF `datasets` Parquet shards |
+| `wk config telemetry on\|off\|status`              | toggle crash / error reporting (see [Crash reporting](#crash-reporting)) |
 
 Every list command supports `--page` / `--page-size` (default 20) and prints a
 ready-to-paste `Next:` line when more pages exist. `wk annotations list`
@@ -117,6 +118,44 @@ WK_TOKEN='wkcli_…' WK_BASE_URL='https://platform.wavekat.com' wk login
 | Windows  | `%APPDATA%\wavekat\auth.json` |
 
 Mode is `0600` on Unix. Run `wk logout` to remove it.
+
+## Crash reporting
+
+`wk` sends anonymous crash and error reports to help us catch bugs we
+wouldn't otherwise see (a server response shape that breaks an older
+CLI, a panic in `exports adapt`, network errors). It's **on by
+default** in the shipped binary.
+
+What we collect:
+
+- CLI version and build SHA, OS / arch, subcommand name.
+- A short error category (`http_4xx`, `decode`, `network`,
+  `auth_missing`, `panic`, …) and a 200-char snippet of the error.
+- For HTTP failures, a **templated** endpoint path
+  (`/api/projects/:id/annotations`, never the real ID).
+- A random anonymous install ID, generated once and stored alongside
+  `auth.json`.
+
+What we never collect:
+
+- Request bodies or response bodies (beyond the 200-char snippet).
+- Full URLs containing IDs, command-line arguments, file paths,
+  environment variables, auth tokens, cookies, or anything you've
+  typed at a prompt.
+
+The scrubber is in source at `src/telemetry.rs` — you can read
+exactly what's filtered before sending.
+
+To opt out:
+
+```sh
+wk config telemetry off          # persistent, until you re-enable
+WK_TELEMETRY=0 wk projects list  # per-invocation
+wk config telemetry status       # show current setting
+```
+
+Source builds without the `telemetry` cargo feature compile out the
+SDK entirely.
 
 ## Examples
 
@@ -205,6 +244,7 @@ Each command maps to a single platform endpoint:
 | `wk exports download <export-id>`           | `GET /api/exports/{id}/manifest` + per-clip `GET /api/exports/{id}/clips/{annotation-id}` |
 | `wk exports delete <export-id>`             | `DELETE /api/exports/{id}` |
 | `wk exports adapt smart-turn`               | local-only; reads a downloaded snapshot |
+| `wk config telemetry`                       | local-only; writes `auth.json` |
 
 ## Help and feedback
 

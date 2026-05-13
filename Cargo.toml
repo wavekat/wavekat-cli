@@ -39,8 +39,35 @@ unicode-width = "0.2"
 url = "2"
 webbrowser = "1"
 
+# Crash + error reporting. Optional so source builds and forks can
+# compile without pulling the SDK; the published binary turns it on
+# via `--features telemetry`. See docs/01-crash-and-error-reporting.md.
+#
+# Feature picks: `panic` + `backtrace` are the minimum useful set;
+# `anyhow` lets `report_error` capture our normal `anyhow::Error`s with
+# their `with_context` chain intact; `reqwest` + `rustls` keep us on
+# the same TLS stack as the rest of the binary (no openssl creep). We
+# explicitly disable the default `native-tls` so cross-builds don't
+# pick up an OS-specific linker dependency.
+sentry = { version = "0.48", default-features = false, features = [
+    "anyhow",
+    "backtrace",
+    "contexts",
+    "panic",
+    "reqwest",
+    "rustls",
+], optional = true }
+
+[features]
+default = []
+telemetry = ["dep:sentry"]
+
 [profile.release]
 opt-level = "z"
 lto = true
 strip = true
 codegen-units = 1
+# Symbolication for crash reports is handled by uploading debug info
+# to Sentry from CI via `sentry-cli upload-dif` (tracked separately).
+# Keeping `strip = true` here preserves the current shipped binary
+# size — see "Symbolication" in docs/01-crash-and-error-reporting.md.

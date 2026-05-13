@@ -7,6 +7,7 @@ mod commands;
 mod config;
 mod progress;
 mod style;
+mod telemetry;
 
 // Both `-V` and `--version` print the same string — that matches what
 // `rustc -V` / `cargo -V` actually do, despite clap's default of
@@ -70,6 +71,11 @@ enum Command {
         #[command(subcommand)]
         command: commands::files::Cmd,
     },
+    /// Read or change persisted CLI preferences (telemetry, …)
+    Config {
+        #[command(subcommand)]
+        command: commands::config::Cmd,
+    },
     /// Print the local CLI version and probe the platform's `/api/health`
     Version(commands::version::Args),
     /// Replace this binary with the latest release (or `--check` to peek)
@@ -80,8 +86,28 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Telemetry must be initialized before anything fallible so a
+    // panic during parsing still gets captured. The guard's `Drop`
+    // flushes pending events on exit (with a short timeout).
+    let _telemetry = telemetry::init();
+
     let cli = Cli::parse();
-    match cli.command {
+    let command_name = command_name(&cli.command);
+
+    // First-run notice goes to stderr after parsing succeeded —
+    // before any command output — so it can't garble JSON streams.
+    telemetry::maybe_print_first_run_notice();
+
+    let started = std::time::Instant::now();
+    let result = dispatch(cli.command).await;
+    if let Err(err) = &result {
+        telemetry::report_error(command_name, started.elapsed(), err);
+    }
+    result
+}
+
+async fn dispatch(cmd: Command) -> Result<()> {
+    match cmd {
         Command::Login(args) => commands::login::run(args).await,
         Command::Logout => commands::logout::run().await,
         Command::Me => commands::me::run().await,
@@ -90,8 +116,28 @@ async fn main() -> Result<()> {
         Command::Exports { command } => commands::exports::run(command).await,
         Command::Models { command } => commands::models::run(command).await,
         Command::Files { command } => commands::files::run(command).await,
+        Command::Config { command } => commands::config::run(command).await,
         Command::Version(args) => commands::version::run(args).await,
         Command::Update(args) => commands::update::run(args).await,
         Command::Agents => commands::agents::run().await,
+    }
+}
+
+/// Static string for the `cli.command` tag — keeps the cardinality
+/// fixed (no argv, no flag values) so Sentry can group cleanly.
+fn command_name(cmd: &Command) -> &'static str {
+    match cmd {
+        Command::Login(_) => "login",
+        Command::Logout => "logout",
+        Command::Me => "me",
+        Command::Projects { .. } => "projects",
+        Command::Annotations { .. } => "annotations",
+        Command::Exports { .. } => "exports",
+        Command::Models { .. } => "models",
+        Command::Files { .. } => "files",
+        Command::Config { .. } => "config",
+        Command::Version(_) => "version",
+        Command::Update(_) => "update",
+        Command::Agents => "agents",
     }
 }

@@ -1,5 +1,6 @@
 pub mod agents;
 pub mod annotations;
+pub mod config;
 pub mod exports;
 pub mod exports_smart_turn;
 pub mod files;
