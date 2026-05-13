@@ -3,3 +3,9 @@ Cargo.lock
 
 # Local download/export scratch dirs (e.g. `wk exports download --out ./export-…`).
 /export-*/
+
+# Local dev env vars (e.g. WK_SENTRY_DSN for telemetry builds).
+# `.env.example` is tracked as the placeholder template.
+.env
+.env.local
+.env.*.local
