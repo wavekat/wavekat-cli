@@ -22,6 +22,36 @@ const VERSION: &str = concat!(
     env!("CARGO_PKG_REPOSITORY"),
 );
 
+// clap has no first-class way to group subcommands under headings in
+// the top-level help, so we render the command list ourselves via
+// `help_template` and replace clap's default `{subcommands}` block.
+// Keep this in sync with the `Command` enum below.
+const HELP_TEMPLATE: &str = "\
+{about-with-newline}
+{usage-heading} {usage}
+
+Account:
+  login        Authenticate against a WaveKat platform instance
+  logout       Forget stored credentials
+  me           Show the currently signed-in user (`GET /api/me`)
+
+Resources:
+  projects     Manage projects
+  annotations  Manage annotations
+  exports      Manage dataset exports
+  models       Manage trained models (push, list, download)
+  files        Manage project files (list, reserve / unreserve test set)
+
+CLI:
+  config       Read or change persisted CLI preferences (telemetry, …)
+  version      Print the local CLI version and probe the platform's `/api/health`
+  update       Replace this binary with the latest release (or `--check` to peek)
+  agents       Print the bundled AGENTS.md guide for AI agents using `wk`
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+{options}{after-help}";
+
 #[derive(Parser)]
 #[command(
     name = "wk",
@@ -31,7 +61,8 @@ const VERSION: &str = concat!(
                   Run `wk login` to authenticate. Credentials are stored under your platform \
                   config dir (e.g. ~/.config/wavekat/auth.json on Linux/macOS).\n\n\
                   Run `wk update` to upgrade in place, or `wk agents` for the AI-agent \
-                  integration guide (also at https://github.com/wavekat/wavekat-cli/blob/main/AGENTS.md)."
+                  integration guide (also at https://github.com/wavekat/wavekat-cli/blob/main/AGENTS.md).",
+    help_template = HELP_TEMPLATE,
 )]
 struct Cli {
     #[command(subcommand)]
