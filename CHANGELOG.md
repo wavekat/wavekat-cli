@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.20](https://github.com/wavekat/wavekat-cli/compare/v0.0.19...v0.0.20) - 2026-05-13
+
+### Added
+
+- add crash and error reporting ([#46](https://github.com/wavekat/wavekat-cli/pull/46))
+
+### Other
+
+- add design note for crash and error reporting ([#44](https://github.com/wavekat/wavekat-cli/pull/44))
+
 ## [0.0.19](https://github.com/wavekat/wavekat-cli/compare/v0.0.18...v0.0.19) - 2026-05-12
 
 ### Other
