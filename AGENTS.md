@@ -33,7 +33,7 @@ Supported targets: macOS (arm64, x86_64), Linux (x86_64, aarch64; musl-static).
 Two paths. **Pre-minted token is the right one for non-interactive agents.**
 
 ```sh
-export WK_TOKEN='wkcli_…'                          # required
+export WK_TOKEN='wk_…'                          # required
 export WK_BASE_URL='https://platform.wavekat.com'  # optional; this is the default
 wk login                                            # verifies + persists the token
 ```

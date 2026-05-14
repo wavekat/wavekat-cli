@@ -19,7 +19,7 @@
 // `--no-browser` falls back to printing the URL for the user to open
 // manually — useful on a remote host where no browser is available.
 // `--token` skips the dance entirely (e.g. for CI), accepting a
-// pre-minted `wkcli_…` token.
+// pre-minted `wk_…` token.
 
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Args as ClapArgs;
@@ -49,7 +49,7 @@ pub struct Args {
     #[arg(long)]
     no_browser: bool,
 
-    /// Pre-minted `wkcli_…` bearer token. Skips the browser handshake
+    /// Pre-minted `wk_…` bearer token. Skips the browser handshake
     /// entirely and just verifies + saves the token. Intended for CI.
     /// Read from `WK_TOKEN` if set.
     #[arg(long, env = "WK_TOKEN")]
@@ -117,14 +117,19 @@ fn browser_handshake(base_url: &str, no_browser: bool) -> Result<String> {
     let port = listener.local_addr()?.port();
 
     let state = random_state();
-    let name = client_name();
+    let source = source_label();
     let callback = format!("http://127.0.0.1:{port}/callback");
 
+    // Wire format matches wavekat-platform: `client` is the short app
+    // identifier (rendered as the consent title); `source` is the
+    // origin label (rendered as "from <source>"). Was a single
+    // concatenated `name=…` param; split before any real users existed.
     let auth_url = format!(
-        "{base_url}/cli-login?callback={cb}&state={state}&name={name}",
+        "{base_url}/cli-login?callback={cb}&state={state}&client={client}&source={source}",
         cb = url::form_urlencoded::byte_serialize(callback.as_bytes()).collect::<String>(),
         state = url::form_urlencoded::byte_serialize(state.as_bytes()).collect::<String>(),
-        name = url::form_urlencoded::byte_serialize(name.as_bytes()).collect::<String>(),
+        client = url::form_urlencoded::byte_serialize(b"wavekat-cli").collect::<String>(),
+        source = url::form_urlencoded::byte_serialize(source.as_bytes()).collect::<String>(),
     );
 
     if no_browser {
@@ -308,12 +313,11 @@ fn base64url(bytes: &[u8]) -> String {
     out
 }
 
-fn client_name() -> String {
-    let host = std::env::var("HOSTNAME")
+fn source_label() -> String {
+    std::env::var("HOSTNAME")
         .ok()
         .or_else(|| hostname().ok())
-        .unwrap_or_else(|| "unknown-host".to_string());
-    format!("wavekat-cli on {host}")
+        .unwrap_or_else(|| "unknown-host".to_string())
 }
 
 #[cfg(unix)]

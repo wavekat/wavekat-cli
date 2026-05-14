@@ -106,7 +106,7 @@ CLI prints).
 Pre-mint a token from your platform profile, then:
 
 ```sh
-WK_TOKEN='wkcli_…' WK_BASE_URL='https://platform.wavekat.com' wk login
+WK_TOKEN='wk_…' WK_BASE_URL='https://platform.wavekat.com' wk login
 ```
 
 ### Where credentials are stored

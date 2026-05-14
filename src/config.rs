@@ -12,7 +12,7 @@ use std::path::PathBuf;
 pub struct AuthConfig {
     #[serde(default)]
     pub base_url: String,
-    /// `wkcli_…` bearer token issued by `POST /api/auth/cli/tokens`.
+    /// `wk_…` bearer token issued by `POST /api/auth/cli/tokens`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
     /// Legacy: raw value of the `wk_session` cookie. Read for back-compat,
