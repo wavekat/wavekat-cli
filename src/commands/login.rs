@@ -105,8 +105,8 @@ async fn browser_handshake(base_url: &str, no_browser: bool) -> Result<String> {
         client: Some("wavekat-cli".to_string()),
         ..HandshakeOptions::default()
     };
-    let pending = loopback_handshake(base_url, options)
-        .context("starting loopback OAuth handshake")?;
+    let pending =
+        loopback_handshake(base_url, options).context("starting loopback OAuth handshake")?;
 
     if no_browser {
         println!(

@@ -35,8 +35,8 @@ impl Client {
                 anyhow!("no credentials in config — run `wk login` to authenticate")
             }
         })?;
-        let inner = Inner::new(cfg.base_url.as_str(), Token::new(token))
-            .context("building HTTP client")?;
+        let inner =
+            Inner::new(cfg.base_url.as_str(), Token::new(token)).context("building HTTP client")?;
         Ok(Self { inner })
     }
 
