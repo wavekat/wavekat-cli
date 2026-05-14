@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.21](https://github.com/wavekat/wavekat-cli/compare/v0.0.20...v0.0.21) - 2026-05-14
+
+### Added
+
+- track wk_ prefix + client/source split in loopback login ([#47](https://github.com/wavekat/wavekat-cli/pull/47))
+
+### Other
+
+- depend on wavekat-platform-client for HTTP + loopback OAuth ([#49](https://github.com/wavekat/wavekat-cli/pull/49))
+
 ## [0.0.20](https://github.com/wavekat/wavekat-cli/compare/v0.0.19...v0.0.20) - 2026-05-13
 
 ### Added
