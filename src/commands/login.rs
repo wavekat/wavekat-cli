@@ -19,7 +19,7 @@
 // `--no-browser` falls back to printing the URL for the user to open
 // manually — useful on a remote host where no browser is available.
 // `--token` skips the dance entirely (e.g. for CI), accepting a
-// pre-minted `wkcli_…` token.
+// pre-minted `wk_…` token.
 
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Args as ClapArgs;
@@ -49,7 +49,7 @@ pub struct Args {
     #[arg(long)]
     no_browser: bool,
 
-    /// Pre-minted `wkcli_…` bearer token. Skips the browser handshake
+    /// Pre-minted `wk_…` bearer token. Skips the browser handshake
     /// entirely and just verifies + saves the token. Intended for CI.
     /// Read from `WK_TOKEN` if set.
     #[arg(long, env = "WK_TOKEN")]
