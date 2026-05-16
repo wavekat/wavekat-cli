@@ -9,12 +9,24 @@ use anyhow::{anyhow, Context, Result};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::io::AsyncWriteExt;
-use wavekat_platform_client::{Client as Inner, Token};
+use wavekat_platform_client::{Client as Inner, Error as PcError, Token};
 
 use crate::config::{self, AuthConfig};
 
 pub struct Client {
     inner: Inner,
+}
+
+/// Translate a platform-client error into an `anyhow::Error`, with a
+/// friendlier message for 401s — the raw `HTTP 401 …: {"error":"unauthenticated"}`
+/// body doesn't tell the user that the fix is `wk login`.
+fn map_err(e: PcError) -> anyhow::Error {
+    match e {
+        PcError::Unauthorized { .. } => anyhow!(
+            "credentials rejected by the platform (token may be expired or revoked) — run `wk login` to sign in again"
+        ),
+        other => anyhow::Error::new(other),
+    }
 }
 
 impl Client {
@@ -48,18 +60,21 @@ impl Client {
     }
 
     pub async fn get_json<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
-        Ok(self.inner.get_json(path).await?)
+        self.inner.get_json(path).await.map_err(map_err)
     }
 
     pub async fn post_empty(&self, path: &str) -> Result<()> {
-        Ok(self.inner.post_empty(path).await?)
+        self.inner.post_empty(path).await.map_err(map_err)
     }
 
     /// POST with an empty body and decode the JSON response. Used by
     /// `wk models push` to call `/finalize` (no body, but the server
     /// returns the updated model row).
     pub async fn post_empty_returning_json<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
-        Ok(self.inner.post_empty_returning_json(path).await?)
+        self.inner
+            .post_empty_returning_json(path)
+            .await
+            .map_err(map_err)
     }
 
     pub async fn get_json_query<T: DeserializeOwned, Q: Serialize + ?Sized>(
@@ -67,7 +82,10 @@ impl Client {
         path: &str,
         query: &Q,
     ) -> Result<T> {
-        Ok(self.inner.get_json_query(path, query).await?)
+        self.inner
+            .get_json_query(path, query)
+            .await
+            .map_err(map_err)
     }
 
     pub async fn post_json<T: DeserializeOwned, B: Serialize + ?Sized>(
@@ -75,11 +93,11 @@ impl Client {
         path: &str,
         body: &B,
     ) -> Result<T> {
-        Ok(self.inner.post_json(path, body).await?)
+        self.inner.post_json(path, body).await.map_err(map_err)
     }
 
     pub async fn delete(&self, path: &str) -> Result<()> {
-        Ok(self.inner.delete(path).await?)
+        self.inner.delete(path).await.map_err(map_err)
     }
 
     /// PUT a request body through the platform proxy upload route, with
@@ -88,7 +106,10 @@ impl Client {
     /// local dev) — bytes flow through the Worker instead of going
     /// direct to R2.
     pub async fn put_proxy_bytes(&self, path: &str, body: Vec<u8>) -> Result<()> {
-        Ok(self.inner.put_proxy_bytes(path, body).await?)
+        self.inner
+            .put_proxy_bytes(path, body)
+            .await
+            .map_err(map_err)
     }
 
     /// PUT a request body to a presigned R2 URL. Implemented as an
@@ -96,7 +117,9 @@ impl Client {
     /// embeds its own SigV4 auth — adding our bearer header would make
     /// S3/R2 reject the request.
     pub async fn put_presigned_bytes(presigned_url: &str, body: Vec<u8>) -> Result<()> {
-        Ok(Inner::put_presigned_bytes(presigned_url, body).await?)
+        Inner::put_presigned_bytes(presigned_url, body)
+            .await
+            .map_err(map_err)
     }
 
     /// Stream a GET response body to a writer. Returns the number of bytes
@@ -107,6 +130,6 @@ impl Client {
         path: &str,
         sink: &mut W,
     ) -> Result<u64> {
-        Ok(self.inner.get_stream_to(path, sink).await?)
+        self.inner.get_stream_to(path, sink).await.map_err(map_err)
     }
 }

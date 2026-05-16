@@ -40,7 +40,7 @@ unicode-width = "0.2"
 # Owns the `Client`, the bearer-token plumbing, and the `/cli-login`
 # handshake — `client.rs` and the handshake half of `commands/login.rs`
 # are thin wrappers over it. See https://github.com/wavekat/wavekat-platform-client.
-wavekat-platform-client = "0.0.2"
+wavekat-platform-client = "0.0.3"
 webbrowser = "1"
 
 # Crash + error reporting. Optional so source builds and forks can
