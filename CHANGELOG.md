@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.22](https://github.com/wavekat/wavekat-cli/compare/v0.0.21...v0.0.22) - 2026-05-16
+
+### Added
+
+- friendlier 401 error message ([#50](https://github.com/wavekat/wavekat-cli/pull/50))
+
 ## [0.0.21](https://github.com/wavekat/wavekat-cli/compare/v0.0.20...v0.0.21) - 2026-05-14
 
 ### Added
