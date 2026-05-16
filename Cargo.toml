@@ -40,7 +40,7 @@ unicode-width = "0.2"
 # Owns the `Client`, the bearer-token plumbing, and the `/cli-login`
 # handshake — `client.rs` and the handshake half of `commands/login.rs`
 # are thin wrappers over it. See https://github.com/wavekat/wavekat-platform-client.
-wavekat-platform-client = "0.0.2"
+wavekat-platform-client = "0.0.3"
 webbrowser = "1"
 
 # Crash + error reporting. Optional so source builds and forks can
@@ -65,16 +65,6 @@ sentry = { version = "0.48", default-features = false, features = [
 [features]
 default = []
 telemetry = ["dep:sentry"]
-
-# TODO(remove-when-published): wavekat-platform-client's next release
-# (≥0.0.3) introduces `Error::Unauthorized`. Until it ships on crates.io,
-# point the dep at the open PR branch so this branch builds — and so CI
-# can resolve the dep without a sibling checkout. After release-plz
-# publishes the new version, bump the `wavekat-platform-client` dep
-# above and delete this `[patch.…]` block.
-# Tracks https://github.com/wavekat/wavekat-platform-client/pull/4.
-[patch.crates-io]
-wavekat-platform-client = { git = "https://github.com/wavekat/wavekat-platform-client.git", branch = "feat/unauthorized-error-variant" }
 
 [profile.release]
 opt-level = "z"

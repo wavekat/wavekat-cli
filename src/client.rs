@@ -82,7 +82,10 @@ impl Client {
         path: &str,
         query: &Q,
     ) -> Result<T> {
-        self.inner.get_json_query(path, query).await.map_err(map_err)
+        self.inner
+            .get_json_query(path, query)
+            .await
+            .map_err(map_err)
     }
 
     pub async fn post_json<T: DeserializeOwned, B: Serialize + ?Sized>(
@@ -103,7 +106,10 @@ impl Client {
     /// local dev) — bytes flow through the Worker instead of going
     /// direct to R2.
     pub async fn put_proxy_bytes(&self, path: &str, body: Vec<u8>) -> Result<()> {
-        self.inner.put_proxy_bytes(path, body).await.map_err(map_err)
+        self.inner
+            .put_proxy_bytes(path, body)
+            .await
+            .map_err(map_err)
     }
 
     /// PUT a request body to a presigned R2 URL. Implemented as an
