@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.23](https://github.com/wavekat/wavekat-cli/compare/v0.0.22...v0.0.23) - 2026-05-23
+
+### Other
+
+- move Linux workflows to self-hosted runners (wavekat-ci) ([#52](https://github.com/wavekat/wavekat-cli/pull/52))
+
 ## [0.0.22](https://github.com/wavekat/wavekat-cli/compare/v0.0.21...v0.0.22) - 2026-05-16
 
 ### Added
