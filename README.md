@@ -251,6 +251,12 @@ Each command maps to a single platform endpoint:
 - `wk --help` (or `wk <command> --help`) for usage details.
 - File issues at <https://github.com/wavekat/wavekat-cli/issues>.
 
+## About WaveKat
+
+WaveKat is an open-source ecosystem for building real-time voice pipelines, plus a platform for working with voice data. `wavekat-cli` (`wk`) is the command-line client for that platform.
+
+See [wavekat.com](https://wavekat.com) for the full project.
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
