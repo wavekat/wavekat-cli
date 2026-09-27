@@ -93,15 +93,18 @@ You can list and revoke tokens any time from your platform profile page.
 
 ### Headless / SSH
 
-If no browser is available locally, run:
+Over SSH (or on a Linux box with no display) `wk login` doesn't try to open a
+browser — it prints the sign-in URL instead. Force this anywhere with
+`wk login --no-browser`.
 
-```sh
-wk login --no-browser
-```
+1. Open the printed URL in a browser on any machine (e.g. your laptop) and
+   click **Authorize**.
+2. The browser then redirects to `http://127.0.0.1:<port>/callback?…`, which
+   won't load because that port lives on the remote host. Copy the full URL
+   from the address bar and paste it at the `Redirect URL:` prompt.
 
-`wk` prints a URL — open it on any browser that can reach the loopback port
-(typically `ssh -L 1234:127.0.0.1:1234 remote-host`, then open the URL the
-CLI prints).
+Alternatively, forward the port (`ssh -L <port>:127.0.0.1:<port> remote-host`)
+and the redirect completes on its own.
 
 ### CI / pre-minted token
 
