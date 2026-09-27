@@ -193,7 +193,16 @@ async fn resolve_latest_tag() -> Result<String> {
     // /releases/latest 302s to /tag/<tag>; reading the redirect target
     // gives us the latest tag without parsing the JSON API (and without
     // hitting unauthenticated rate limits).
-    let url = format!("https://github.com/{REPO}/releases/latest");
+    //
+    // The throwaway query string is load-bearing: for a few minutes after
+    // a release is promoted, some GitHub edge nodes keep serving the old
+    // redirect for the bare URL (despite `cache-control: no-cache`), which
+    // made `wk update` report "already the latest" on the previous tag.
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    let url = format!("https://github.com/{REPO}/releases/latest?_={nonce}");
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .user_agent(concat!("wavekat-cli/", env!("CARGO_PKG_VERSION")))
