@@ -39,6 +39,8 @@ with `--help` to see all flags, or jump to the [Examples](#examples).
 | `wk exports delete <export-id> --yes`             | soft-delete an export (cleanup sweep purges later) |
 | `wk exports adapt smart-turn …`                   | convert a downloaded export into HF `datasets` Parquet shards |
 | `wk config telemetry on\|off\|status`              | toggle crash / error reporting (see [Crash reporting](#crash-reporting)) |
+| `wk admin …`                                      | root-only platform analytics — users, Voice installs, usage funnel, downloads, prompt usage, geography — as JSON (see [Admin analytics](#admin-analytics)) |
+| `wk api <path>`                                   | GET any platform endpoint and print its JSON, like `gh api` |
 
 Every list command supports `--page` / `--page-size` (default 20) and prints a
 ready-to-paste `Next:` line when more pages exist. `wk annotations list`
@@ -226,6 +228,38 @@ This both validates the source bytes (corrupt or non-WAV clips fail at
 adapt time, with the failing path in the error) and guarantees the
 shards contain a uniform shape downstream notebooks can rely on.
 
+## Admin analytics
+
+For people with the global `root` role on the platform. `wk admin` wraps
+the platform's root-only read endpoints so you (or an AI agent) can pull
+real customer and product data from the terminal:
+
+```sh
+wk admin users list -q pageSize=100          # users + headline stats
+wk admin users show <user-id>                # one user's activity summary
+wk admin installs metrics -q days=30         # Voice fleet: active installs, versions, channels
+wk admin installs events <install-id>        # one install's usage events
+wk admin usage                               # usage-event funnel
+wk admin downloads metrics                   # download numbers
+wk admin prompts callers                     # voice-prompt spend per caller
+wk admin geo -q days=90                      # where customers sign in from
+wk admin spec > openapi.json                 # every endpoint and its parameters
+```
+
+Every `wk admin` command, and `wk api`, prints the endpoint's JSON
+unchanged — there is no table view. Filters and pagination go through
+`-q key=value` (repeatable) instead of per-command flags; `wk admin spec`
+lists what each endpoint accepts. For anything without a named command,
+use `wk api`:
+
+```sh
+wk api /api/admin/voice/installs -q channel=beta -q pageSize=50
+```
+
+Both are GET-only. A token from a non-root account gets a `403`. Errors
+from these two commands are never sent to crash reporting, because their
+URLs and response bodies can identify customers.
+
 ## API reference
 
 Each command maps to a single platform endpoint:
@@ -245,6 +279,17 @@ Each command maps to a single platform endpoint:
 | `wk exports delete <export-id>`             | `DELETE /api/exports/{id}` |
 | `wk exports adapt smart-turn`               | local-only; reads a downloaded snapshot |
 | `wk config telemetry`                       | local-only; writes `auth.json` |
+| `wk admin users list` / `show <id>`         | `GET /api/users` / `GET /api/users/{id}` |
+| `wk admin installs metrics` / `list`        | `GET /api/admin/voice/installs/metrics` / `GET /api/admin/voice/installs` |
+| `wk admin installs show <id>`               | `GET /api/admin/voice/installs/{id}` (`--install-id`: `…/installs/by-install-id/{installId}`) |
+| `wk admin installs events <install-id>`     | `GET /api/admin/voice/installs/by-install-id/{installId}/events` |
+| `wk admin usage`                            | `GET /api/admin/voice/usage` |
+| `wk admin downloads metrics` / `list`       | `GET /api/admin/voice/downloads/metrics` / `GET /api/admin/voice/downloads` |
+| `wk admin prompts usage` / `callers` / `events` | `GET /api/admin/voice/prompt-usage` / `prompt-callers` / `prompt-events` |
+| `wk admin geo`                              | `GET /api/admin/geo` |
+| `wk admin cli-usage`                        | `GET /api/admin/cli-usage` |
+| `wk admin spec`                             | `GET /api/openapi.json` |
+| `wk api <path>`                             | `GET <path>` (the `/api` prefix is optional) |
 
 ## Help and feedback
 
