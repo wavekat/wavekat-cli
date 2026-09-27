@@ -46,8 +46,8 @@ exported.
 For interactive use only (a real human at a real keyboard):
 
 ```sh
-wk login              # opens a browser
-wk login --no-browser # prints a URL the user opens manually (e.g. SSH)
+wk login              # opens a browser (prints a URL instead over SSH / no display)
+wk login --no-browser # always print the URL; user pastes the redirect URL back
 ```
 
 `wk logout` revokes the current token and clears the local file.
@@ -268,7 +268,9 @@ wk api /api/admin/voice/downloads -q pageSize=50
 ## Quirks worth knowing
 
 - **`wk login` runs a loopback OAuth handshake.** Don't try to script
-  it without `WK_TOKEN`; there is no headless-browser fallback.
+  it without `WK_TOKEN`; there is no headless-browser fallback. Over SSH
+  it prints the URL and waits on a `Redirect URL:` stdin prompt for the
+  user to paste the `127.0.0.1/callback?…` URL their browser landed on.
 - **`wk exports create` blocks** until the platform finishes copying
   clips to R2. Seconds-to-minutes is normal. Exit status reflects
   success/failure of the whole operation, not just submission.
