@@ -178,7 +178,7 @@ pub fn maybe_print_first_run_notice() {
     eprintln!(
         "wk: anonymous error reports help us fix bugs faster.\n     \
          set WK_TELEMETRY=0 (or run `wk config telemetry off`) to opt out.\n     \
-         what we collect: https://wavekat.com/docs/crashes"
+         what we collect: https://wavekat.com/privacy/#telemetry"
     );
     cfg.telemetry_notice_shown = true;
     let _ = config::save(&cfg);
