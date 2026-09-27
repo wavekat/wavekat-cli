@@ -75,6 +75,12 @@ and the layout is not stable.
 | `wk models show <id> --json`                | full model row (lineage, metrics, artifacts list)            |
 | `wk models push … --json`                   | the finalized model row (or existing row if idempotent)      |
 
+`wk admin …` and `wk api <path>` always print JSON (there is no table
+view; `--json` is accepted and ignored). Their output is the platform
+endpoint's response body **unchanged**, so its shape is whatever the
+endpoint returns — read it from `wk admin spec` (the OpenAPI document)
+rather than from this table.
+
 Local file producers (`wk exports download`, `wk exports adapt smart-turn`)
 write files to disk and print the output path on stdout. Progress goes
 to stderr.
@@ -230,6 +236,35 @@ wk exports create "$PROJECT_ID" \
   --json
 ```
 
+### Analyse customers and product usage (root accounts only)
+
+Every `wk admin` command is a GET against a root-only endpoint. Start
+from the spec so you know what each endpoint returns and accepts:
+
+```sh
+wk admin spec | jq '.paths | keys[] | select(startswith("/api/admin") or startswith("/api/users"))'
+wk admin spec | jq '.paths["/api/admin/voice/installs"].get.parameters'
+```
+
+Then pull data, passing filters as `-q key=value`:
+
+```sh
+wk admin users list -q pageSize=100 -q sort=recent | jq '.users[] | {id, login, tier}'
+wk admin installs metrics -q days=30
+wk admin usage | jq '.byName[] | {name, installs7d, installsAllTime}'
+wk admin geo -q days=90 | jq '.countries[:10]'
+```
+
+Page-paginated endpoints take `-q page=N -q pageSize=N` and report
+`totalPages`; cursor-paginated ones (`installs events`, `prompts
+events`) take `-q cursor=<nextCursor>` until `nextCursor` is `null`.
+
+Anything without a named command is one `wk api` call away:
+
+```sh
+wk api /api/admin/voice/downloads -q pageSize=50
+```
+
 ## Quirks worth knowing
 
 - **`wk login` runs a loopback OAuth handshake.** Don't try to script
@@ -242,6 +277,13 @@ wk exports create "$PROJECT_ID" \
   Worker subrequest budgets without meaningfully improving wall time.
   The bar tracks every manifest entry — already-on-disk clips count
   toward progress, so resumes look fast.
+- **`wk admin` needs the global `root` role.** Any other token gets a
+  `403`, reported as `forbidden — wk admin needs … root role`. There is
+  no client-side check; the platform decides.
+- **`wk api` is GET-only.** It will not create, change or delete
+  anything; mutations stay behind dedicated commands.
+- **Errors from `wk admin` / `wk api` are not sent to crash reporting**,
+  because their URLs and bodies can identify customers.
 - **All list endpoints paginate.** Default `--page-size` is 20. Use
   `total` / `totalPages` to know when to stop.
 - **The smart-turn adapter only handles two label keys** (`end_of_turn`

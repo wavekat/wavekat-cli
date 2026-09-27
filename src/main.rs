@@ -42,6 +42,10 @@ Resources:
   models       Manage trained models (push, list, download)
   files        Manage project files (list, reserve / unreserve test set)
 
+Admin & raw API:
+  admin        Root-only platform analytics (users, installs, usage, …) as JSON
+  api          GET any platform endpoint and print its JSON (`wk api /api/admin/geo`)
+
 CLI:
   config       Read or change persisted CLI preferences (telemetry, …)
   version      Print the local CLI version and probe the platform's `/api/health`
@@ -102,6 +106,13 @@ enum Command {
         #[command(subcommand)]
         command: commands::files::Cmd,
     },
+    /// Root-only platform analytics (users, installs, usage, …) as JSON
+    Admin {
+        #[command(subcommand)]
+        command: commands::admin::Cmd,
+    },
+    /// GET any platform endpoint and print its JSON (`wk api /api/admin/geo`)
+    Api(commands::api::Args),
     /// Read or change persisted CLI preferences (telemetry, …)
     Config {
         #[command(subcommand)]
@@ -132,7 +143,9 @@ async fn main() -> Result<()> {
     let started = std::time::Instant::now();
     let result = dispatch(cli.command).await;
     if let Err(err) = &result {
-        telemetry::report_error(command_name, started.elapsed(), err);
+        if reports_errors(command_name) {
+            telemetry::report_error(command_name, started.elapsed(), err);
+        }
     }
     result
 }
@@ -147,11 +160,21 @@ async fn dispatch(cmd: Command) -> Result<()> {
         Command::Exports { command } => commands::exports::run(command).await,
         Command::Models { command } => commands::models::run(command).await,
         Command::Files { command } => commands::files::run(command).await,
+        Command::Admin { command } => commands::admin::run(command).await,
+        Command::Api(args) => commands::api::run(args).await,
         Command::Config { command } => commands::config::run(command).await,
         Command::Version(args) => commands::version::run(args).await,
         Command::Update(args) => commands::update::run(args).await,
         Command::Agents => commands::agents::run().await,
     }
+}
+
+/// `admin` and `api` errors carry caller-chosen URLs and server bodies
+/// about customers (user ids, `-q q=<email>` searches) that the
+/// telemetry scrubber can't recognise as identifiers, so they are kept
+/// out of error reporting entirely. Panics are still reported.
+fn reports_errors(command_name: &str) -> bool {
+    !matches!(command_name, "admin" | "api")
 }
 
 /// Static string for the `cli.command` tag — keeps the cardinality
@@ -166,9 +189,23 @@ fn command_name(cmd: &Command) -> &'static str {
         Command::Exports { .. } => "exports",
         Command::Models { .. } => "models",
         Command::Files { .. } => "files",
+        Command::Admin { .. } => "admin",
+        Command::Api(_) => "api",
         Command::Config { .. } => "config",
         Command::Version(_) => "version",
         Command::Update(_) => "update",
         Command::Agents => "agents",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn customer_data_commands_skip_error_reporting() {
+        assert!(!reports_errors("admin"));
+        assert!(!reports_errors("api"));
+        assert!(reports_errors("exports"));
     }
 }
