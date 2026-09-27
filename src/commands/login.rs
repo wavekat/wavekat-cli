@@ -7,18 +7,19 @@
 // printing a confirmation that includes the user's role.
 //
 // On a remote host (SSH session, or Linux with no display) — or with
-// `--no-browser` — we print the URL instead of opening a browser. The
-// browser's final redirect to `127.0.0.1:<port>` then can't reach this
-// machine, so the user can paste that redirect URL back into the
-// terminal; we pull the token out of it (checking the CSRF state) and
-// race that against the loopback listener, whichever lands first.
-// `--token` skips the dance entirely (e.g. for CI), accepting a
-// pre-minted `wk_…` token.
+// `--no-browser` — a browser's redirect to `127.0.0.1` can't reach this
+// machine, so we skip the loopback listener entirely. We print a
+// `/cli-login?mode=code` URL; after the user authorizes, the page shows
+// a one-time code, which they paste here. We trade code + our `state`
+// for a token at `/api/auth/cli/codes/exchange`. `--token` skips the
+// dance entirely (e.g. for CI), accepting a pre-minted `wk_…` token.
 
-use std::io::{BufRead, Write};
+use std::io::Write;
 
 use anyhow::{bail, Context, Result};
 use clap::Args as ClapArgs;
+use rand::distributions::{Alphanumeric, DistString};
+use reqwest::Url;
 use wavekat_platform_client::{loopback_handshake, HandshakeOptions};
 
 use crate::client::Client;
@@ -35,10 +36,9 @@ pub struct Args {
     #[arg(long, env = "WK_BASE_URL")]
     base_url: Option<String>,
 
-    /// Skip opening the browser; print the URL instead. Implied when
+    /// Skip opening the browser; print a URL instead. Implied when
     /// running over SSH or on Linux without a display. Open the URL in any
-    /// browser, then paste the URL it redirects to back into the terminal
-    /// (or SSH port-forward the loopback port so the redirect lands).
+    /// browser, authorize, then paste the one-time code the page shows.
     #[arg(long)]
     no_browser: bool,
 
@@ -105,105 +105,110 @@ pub async fn run(args: Args) -> Result<()> {
 }
 
 async fn browser_handshake(base_url: &str, no_browser: bool) -> Result<String> {
+    if no_browser || is_remote_session() {
+        return code_handshake(base_url).await;
+    }
+
     // `client = "wavekat-cli"` is the consent-screen title; `source`
     // defaults to the machine's hostname (rendered as "from <host>").
     // Timeout matches the CLI's previous 5-minute deadline — generous
     // enough that re-running `wk login` is the right answer if a user
     // gets distracted.
     let options = HandshakeOptions {
-        client: Some("wavekat-cli".to_string()),
+        client: Some(CLIENT.to_string()),
         ..HandshakeOptions::default()
     };
     let pending =
         loopback_handshake(base_url, options).context("starting loopback OAuth handshake")?;
 
-    let mut manual = no_browser || is_remote_session();
-    if !manual {
-        println!("Opening {base_url} in your browser to sign in…");
-        if let Err(e) = webbrowser::open(pending.url()) {
-            eprintln!("(couldn't open the browser automatically: {e})");
-            manual = true;
-        }
+    println!("Opening {base_url} in your browser to sign in…");
+    if let Err(e) = webbrowser::open(pending.url()) {
+        eprintln!("(couldn't open the browser automatically: {e})");
+        return code_handshake(base_url).await;
     }
 
-    if !manual {
-        println!("Waiting for the browser to redirect back (Ctrl-C to cancel)…");
-        let outcome = pending
-            .wait()
-            .await
-            .context("waiting for the browser callback")?;
-        return Ok(outcome.token.as_str().to_string());
-    }
+    println!("Waiting for the browser to redirect back (Ctrl-C to cancel)…");
+    let outcome = pending
+        .wait()
+        .await
+        .context("waiting for the browser callback")?;
+    Ok(outcome.token.as_str().to_string())
+}
 
-    println!(
-        "Open this URL in a browser on any machine to sign in:\n\n  {}\n",
-        pending.url(),
-    );
-    println!(
-        "After you authorize, the browser redirects to a {} address. If that\n\
-         page fails to load (expected over SSH), copy the full URL from the\n\
-         address bar and paste it here.\n",
-        style::bold("127.0.0.1"),
-    );
-    print!("Redirect URL: ");
-    let _ = std::io::stdout().flush();
+const CLIENT: &str = "wavekat-cli";
 
-    // Read the pasted URL on a plain OS thread, not `spawn_blocking`:
-    // the runtime waits for blocking tasks on shutdown, and a stdin read
-    // that never completes would hang `wk` after the loopback path wins.
-    // Detached threads are simply dropped when the process exits.
-    let state = pending.state().to_string();
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-    std::thread::spawn(move || {
-        let stdin = std::io::stdin();
-        let mut line = String::new();
-        loop {
-            line.clear();
-            match stdin.lock().read_line(&mut line) {
-                Ok(0) | Err(_) => return,
-                Ok(_) => {
-                    if tx.send(line.clone()).is_err() {
-                        return;
-                    }
-                }
-            }
-        }
-    });
+/// Copy-and-paste sign-in: the page shows a one-time code instead of
+/// redirecting to a loopback address this machine can't serve.
+async fn code_handshake(base_url: &str) -> Result<String> {
+    let state = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let url = code_login_url(base_url, &state, hostname().as_deref())?;
+    println!("Open this URL in a browser on any machine to sign in:\n\n  {url}\n");
+    println!("After you authorize, the page shows a one-time code. Paste it here.\n");
 
-    // Same reasoning for the loopback listener: its accept loop runs on
-    // a blocking worker until the 5-minute deadline, so if the paste wins
-    // it must not be on our runtime. Give it a detached thread + runtime.
-    let (wait_tx, wait_rx) = tokio::sync::oneshot::channel();
-    std::thread::spawn(move || {
-        let Ok(rt) = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        else {
-            return;
-        };
-        let _ = wait_tx.send(rt.block_on(pending.wait()));
-    });
-    tokio::pin!(wait_rx);
+    let http = reqwest::Client::builder()
+        .user_agent(concat!("wavekat-cli/", env!("CARGO_PKG_VERSION")))
+        .build()?;
+    let exchange = format!("{base_url}/api/auth/cli/codes/exchange");
     loop {
-        tokio::select! {
-            outcome = &mut wait_rx => {
-                println!();
-                let outcome = outcome
-                    .context("loopback listener stopped unexpectedly")?
-                    .context("waiting for the browser callback")?;
-                return Ok(outcome.token.as_str().to_string());
-            }
-            Some(line) = rx.recv() => {
-                match parse_pasted_redirect(&line, &state) {
-                    Ok(Some(token)) => return Ok(token),
-                    Ok(None) => {}
-                    Err(e) => eprintln!("{} {e}", style::red("✗")),
-                }
-                print!("Redirect URL: ");
-                let _ = std::io::stdout().flush();
-            }
+        print!("Code: ");
+        let _ = std::io::stdout().flush();
+        let line = tokio::task::spawn_blocking(|| {
+            let mut line = String::new();
+            std::io::stdin().read_line(&mut line).map(|n| (n, line))
+        })
+        .await??;
+        let code = match line {
+            (0, _) => bail!("sign-in cancelled (no code entered)"),
+            (_, l) if l.trim().is_empty() => continue,
+            (_, l) => l.trim().to_string(),
+        };
+
+        let res = http
+            .post(&exchange)
+            .json(&serde_json::json!({ "code": code, "state": state }))
+            .send()
+            .await
+            .context("redeeming the sign-in code")?;
+        if res.status() == reqwest::StatusCode::BAD_REQUEST {
+            eprintln!(
+                "{} That code didn't work — check it and try again. Codes expire after\n  \
+                 10 minutes; if yours has, re-run `wk login` (Ctrl-C to cancel).",
+                style::red("✗"),
+            );
+            continue;
         }
+        let body: serde_json::Value = res
+            .error_for_status()
+            .context("redeeming the sign-in code")?
+            .json()
+            .await?;
+        return body
+            .get("token")
+            .and_then(|t| t.as_str())
+            .map(str::to_string)
+            .context("platform response had no token");
     }
+}
+
+fn code_login_url(base_url: &str, state: &str, source: Option<&str>) -> Result<String> {
+    let mut url = Url::parse(&format!("{base_url}/cli-login"))
+        .with_context(|| format!("invalid base URL {base_url:?}"))?;
+    url.query_pairs_mut()
+        .append_pair("mode", "code")
+        .append_pair("state", state)
+        .append_pair("client", CLIENT);
+    if let Some(source) = source.filter(|s| !s.is_empty()) {
+        url.query_pairs_mut().append_pair("source", source);
+    }
+    Ok(url.to_string())
+}
+
+/// The machine name shown on the consent screen as "from <host>" —
+/// same default the loopback handshake uses.
+fn hostname() -> Option<String> {
+    let out = std::process::Command::new("hostname").output().ok()?;
+    let name = String::from_utf8(out.stdout).ok()?.trim().to_string();
+    (out.status.success() && !name.is_empty()).then_some(name)
 }
 
 /// True when a browser launched from this process almost certainly
@@ -218,108 +223,23 @@ fn is_remote_session() -> bool {
     cfg!(all(unix, not(target_os = "macos"))) && !set("DISPLAY") && !set("WAYLAND_DISPLAY")
 }
 
-/// Extract the token from a pasted `http://127.0.0.1:<port>/callback?…`
-/// redirect URL. `Ok(None)` for a blank line; `Err` for anything that
-/// isn't a valid callback for *this* handshake.
-fn parse_pasted_redirect(input: &str, expected_state: &str) -> Result<Option<String>> {
-    let input = input.trim();
-    if input.is_empty() {
-        return Ok(None);
-    }
-    let query = input.split_once('?').map(|(_, q)| q).unwrap_or(input);
-    let query = query.split('#').next().unwrap_or("");
-
-    let (mut token, mut state, mut error) = (None, None, None);
-    for pair in query.split('&') {
-        let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
-        let v = percent_decode(v);
-        match k {
-            "token" => token = Some(v),
-            "state" => state = Some(v),
-            "error" => error = Some(v),
-            _ => {}
-        }
-    }
-
-    if token.is_none() && error.is_none() {
-        bail!("that doesn't look like the redirect URL (no `token=` in it) — try again");
-    }
-    if state.as_deref() != Some(expected_state) {
-        bail!("state mismatch — that URL is from a different sign-in attempt");
-    }
-    if let Some(err) = error {
-        bail!("sign-in was cancelled in the browser ({err})");
-    }
-    Ok(token.filter(|t| !t.is_empty()))
-}
-
-/// Decode `application/x-www-form-urlencoded` values (`+` → space,
-/// `%XX` → byte). Invalid escapes are passed through verbatim.
-fn percent_decode(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'+' => out.push(b' '),
-            b'%' => match bytes.get(i + 1..i + 3).and_then(hex_byte) {
-                Some(b) => {
-                    out.push(b);
-                    i += 2;
-                }
-                None => out.push(b'%'),
-            },
-            b => out.push(b),
-        }
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-fn hex_byte(pair: &[u8]) -> Option<u8> {
-    u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const URL: &str = "http://127.0.0.1:54321/callback?token=wk_abc%2Bdef&state=s-1_x&login=eason";
-
     #[test]
-    fn pasted_redirect_yields_token() {
-        let got = parse_pasted_redirect(&format!("  {URL}\n"), "s-1_x").unwrap();
-        assert_eq!(got.as_deref(), Some("wk_abc+def"));
+    fn code_login_url_has_no_callback() {
+        let url = code_login_url("https://platform.wavekat.com", "abc123", Some("my box")).unwrap();
+        assert_eq!(
+            url,
+            "https://platform.wavekat.com/cli-login?mode=code&state=abc123&client=wavekat-cli&source=my+box"
+        );
     }
 
     #[test]
-    fn pasted_redirect_accepts_bare_query() {
-        let got = parse_pasted_redirect("token=wk_1&state=s", "s").unwrap();
-        assert_eq!(got.as_deref(), Some("wk_1"));
-    }
-
-    #[test]
-    fn pasted_redirect_rejects_wrong_state() {
-        assert!(parse_pasted_redirect(URL, "other").is_err());
-    }
-
-    #[test]
-    fn pasted_redirect_surfaces_cancel() {
-        let err = parse_pasted_redirect("/callback?error=denied&state=s", "s").unwrap_err();
-        assert!(err.to_string().contains("denied"), "{err}");
-    }
-
-    #[test]
-    fn pasted_redirect_ignores_blank_and_rejects_junk() {
-        assert!(parse_pasted_redirect("   \n", "s").unwrap().is_none());
-        assert!(parse_pasted_redirect("hello", "s").is_err());
-    }
-
-    #[test]
-    fn percent_decode_handles_edges() {
-        assert_eq!(percent_decode("a%20b+c"), "a b c");
-        assert_eq!(percent_decode("100%"), "100%");
-        assert_eq!(percent_decode("%zz"), "%zz");
-        assert_eq!(percent_decode("%é"), "%é");
+    fn code_login_url_omits_empty_source() {
+        let url = code_login_url("http://localhost:5173", "s", Some("")).unwrap();
+        assert!(!url.contains("source"), "{url}");
+        assert!(code_login_url("not a url", "s", None).is_err());
     }
 }
