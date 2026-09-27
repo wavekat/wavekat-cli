@@ -380,7 +380,7 @@ addition** as `wk bug-report`, not instead.
 2. Mint a DSN. Store it as a build-time env var
    (`WK_SENTRY_DSN`); the binary's release build embeds it via
    `env!()`. Source builds without the var simply no-op.
-3. Publish a public redaction policy page (`wavekat.com/docs/crashes`
+3. Publish a public redaction policy page (`wavekat.com/privacy/#telemetry`
    or similar) we can link from the first-run notice and the README.
    Page links to the scrubber source.
 

@@ -146,7 +146,8 @@ What we never collect:
   typed at a prompt.
 
 The scrubber is in source at `src/telemetry.rs` — you can read
-exactly what's filtered before sending.
+exactly what's filtered before sending. See also the
+[privacy policy](https://wavekat.com/privacy/#telemetry).
 
 To opt out:
 
