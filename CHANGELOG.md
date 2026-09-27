@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.26](https://github.com/wavekat/wavekat-cli/compare/v0.0.25...v0.0.26) - 2026-09-27
+
+### Added
+
+- paste a one-time code for wk login over SSH ([#63](https://github.com/wavekat/wavekat-cli/pull/63))
+
+### Fixed
+
+- bust stale cache when resolving latest release ([#61](https://github.com/wavekat/wavekat-cli/pull/61))
+
 ## [0.0.25](https://github.com/wavekat/wavekat-cli/compare/v0.0.24...v0.0.25) - 2026-09-27
 
 ### Added
