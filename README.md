@@ -99,12 +99,12 @@ browser — it prints the sign-in URL instead. Force this anywhere with
 
 1. Open the printed URL in a browser on any machine (e.g. your laptop) and
    click **Authorize**.
-2. The browser then redirects to `http://127.0.0.1:<port>/callback?…`, which
-   won't load because that port lives on the remote host. Copy the full URL
-   from the address bar and paste it at the `Redirect URL:` prompt.
+2. The page shows a one-time code (`XXXX-XXXX`). Paste it at the `Code:`
+   prompt.
 
-Alternatively, forward the port (`ssh -L <port>:127.0.0.1:<port> remote-host`)
-and the redirect completes on its own.
+The code works once and expires after 10 minutes. It only works together
+with the secret that `wk login` generated, so a code someone else sees is
+useless to them.
 
 ### CI / pre-minted token
 
