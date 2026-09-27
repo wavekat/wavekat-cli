@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.24](https://github.com/wavekat/wavekat-cli/compare/v0.0.23...v0.0.24) - 2026-09-27
+
+### Added
+
+- add wk admin and wk api for analytics ([#56](https://github.com/wavekat/wavekat-cli/pull/56))
+
 ## [0.0.23](https://github.com/wavekat/wavekat-cli/compare/v0.0.22...v0.0.23) - 2026-05-23
 
 ### Other
