@@ -57,12 +57,15 @@ resolve_version() {
     return
   fi
   # The /releases/latest endpoint redirects to /releases/tag/<tag>; pick the tag
-  # off the redirect. Avoids needing jq.
+  # off the redirect. Avoids needing jq. The throwaway query string sidesteps
+  # GitHub edge nodes that keep serving the pre-release redirect for a few
+  # minutes after a new release is promoted.
+  latest_url="https://github.com/${REPO}/releases/latest?_=$(date +%s)$$"
   if command -v curl >/dev/null 2>&1; then
     tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
-      "https://github.com/${REPO}/releases/latest" | sed 's|.*/tag/||')
+      "$latest_url" | sed 's|.*/tag/||')
   else
-    tag=$(wget -qS --max-redirect=0 "https://github.com/${REPO}/releases/latest" 2>&1 \
+    tag=$(wget -qS --max-redirect=0 "$latest_url" 2>&1 \
       | awk '/Location:/ {print $2}' | tail -1 | sed 's|.*/tag/||')
   fi
   [ -n "$tag" ] || err "could not resolve latest version"
