@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.27](https://github.com/wavekat/wavekat-cli/compare/v0.0.26...v0.0.27) - 2026-09-28
+
+### Fixed
+
+- accept UUID user ids ([#65](https://github.com/wavekat/wavekat-cli/pull/65))
+- explain network errors ([#64](https://github.com/wavekat/wavekat-cli/pull/64))
+
 ## [0.0.26](https://github.com/wavekat/wavekat-cli/compare/v0.0.25...v0.0.26) - 2026-09-27
 
 ### Added
