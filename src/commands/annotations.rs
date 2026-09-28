@@ -30,7 +30,7 @@ pub struct ListArgs {
     file_id: Option<String>,
     /// Filter to a labeller's user id
     #[arg(long)]
-    created_by: Option<i64>,
+    created_by: Option<String>,
     /// Print raw JSON instead of a table
     #[arg(long)]
     json: bool,
@@ -48,7 +48,7 @@ struct ListQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
     file_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    created_by: Option<i64>,
+    created_by: Option<String>,
 }
 
 #[derive(Deserialize)]

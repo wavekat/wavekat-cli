@@ -99,7 +99,7 @@ pub struct CreateArgs {
     label_keys: Vec<String>,
     /// Restrict to annotations created by these labeller user ids. Repeatable.
     #[arg(long = "labeller-id")]
-    labeller_ids: Vec<i64>,
+    labeller_ids: Vec<String>,
     /// Lower bound on annotation `createdAt` (RFC 3339).
     #[arg(long)]
     created_at_from: Option<String>,
@@ -220,7 +220,7 @@ struct ExportRow {
     /// `ready`. Mirrors the platform UI's tooltip on the clips cell.
     #[serde(default)]
     split_counts: Option<SplitCounts>,
-    created_by: i64,
+    created_by: String,
     created_by_login: Option<String>,
     created_at: String,
     ready_at: Option<String>,
@@ -268,7 +268,7 @@ struct CreateFilter<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     label_keys: Option<Vec<&'a str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    labeller_ids: Option<Vec<i64>>,
+    labeller_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     created_at_from: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]

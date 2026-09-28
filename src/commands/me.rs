@@ -6,7 +6,7 @@ use crate::style;
 
 #[derive(Deserialize)]
 struct Me {
-    id: i64,
+    id: String,
     login: String,
     name: Option<String>,
     email: Option<String>,
