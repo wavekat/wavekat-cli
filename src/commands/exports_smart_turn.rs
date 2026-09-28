@@ -33,9 +33,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
-use arrow_array::builder::{
-    BinaryBuilder, Float64Builder, Int32Builder, Int64Builder, StringBuilder,
-};
+use arrow_array::builder::{BinaryBuilder, Float64Builder, Int32Builder, StringBuilder};
 use arrow_array::{ArrayRef, RecordBatch, StructArray};
 use arrow_schema::{DataType, Field, Schema};
 use parquet::arrow::ArrowWriter;
@@ -79,7 +77,7 @@ struct ManifestRow {
     label_value: i64,
     source_file_id: String,
     source_file_sha256: String,
-    labeller_id: i64,
+    labeller_id: String,
     // Nullable in the manifest — annotations created before the review
     // workflow shipped, or rows captured pre-review, serialise as null.
     // We don't use the field, so just tolerate either shape.
@@ -127,7 +125,7 @@ fn build_schema() -> Arc<Schema> {
         Field::new("clip_sha256", DataType::Utf8, false),
         Field::new("source_file_id", DataType::Utf8, false),
         Field::new("source_file_sha256", DataType::Utf8, false),
-        Field::new("labeller_id", DataType::Int64, false),
+        Field::new("labeller_id", DataType::Utf8, false),
         Field::new("clip_duration_sec", DataType::Float64, false),
     ]))
 }
@@ -178,7 +176,7 @@ fn build_record_batch(
     let mut clip_sha256 = StringBuilder::new();
     let mut source_file_id = StringBuilder::new();
     let mut source_file_sha256 = StringBuilder::new();
-    let mut labeller_id = Int64Builder::new();
+    let mut labeller_id = StringBuilder::new();
     let mut clip_duration_sec = Float64Builder::new();
 
     // Validate every label up front — a typo in `label_key` should
@@ -215,7 +213,7 @@ fn build_record_batch(
         clip_sha256.append_value(&row.clip_sha256);
         source_file_id.append_value(&row.source_file_id);
         source_file_sha256.append_value(&row.source_file_sha256);
-        labeller_id.append_value(row.labeller_id);
+        labeller_id.append_value(&row.labeller_id);
         clip_duration_sec.append_value(row.clip_duration_sec);
     }
 
@@ -288,7 +286,7 @@ ds = ds.cast_column("audio", Audio(sampling_rate=16000))
 | `clip_sha256` | string | passthrough from canonical snapshot |
 | `source_file_id` | string | passthrough |
 | `source_file_sha256` | string | passthrough |
-| `labeller_id` | int64 | passthrough |
+| `labeller_id` | string | passthrough |
 | `clip_duration_sec` | float64 | passthrough |
 "#;
 
@@ -430,7 +428,7 @@ mod tests {
             label_value: 1,
             source_file_id: String::new(),
             source_file_sha256: String::new(),
-            labeller_id: 0,
+            labeller_id: String::new(),
             review_status: Some("approved".into()),
             split: "train".into(),
         };
@@ -463,7 +461,7 @@ mod tests {
             // round-trip the bytes.
             std::fs::write(clips_dir.join(format!("{id}.wav")), tiny_wav_bytes()).unwrap();
             let line = format!(
-                r#"{{"annotationId":"{id}","clipPath":"clips/{id}.wav","clipSha256":"sha","clipDurationSec":1.5,"clipSampleRate":16000,"labelKey":"{key}","labelValue":{val},"startSec":0.0,"endSec":1.5,"padSec":0.0,"sourceFileId":"f0","sourceFileSha256":"s0","labellerId":1,"reviewStatus":"approved","split":"{split}"}}"#,
+                r#"{{"annotationId":"{id}","clipPath":"clips/{id}.wav","clipSha256":"sha","clipDurationSec":1.5,"clipSampleRate":16000,"labelKey":"{key}","labelValue":{val},"startSec":0.0,"endSec":1.5,"padSec":0.0,"sourceFileId":"f0","sourceFileSha256":"s0","labellerId":"u1","reviewStatus":"approved","split":"{split}"}}"#,
             );
             manifest.push_str(&line);
             manifest.push('\n');
@@ -526,7 +524,7 @@ mod tests {
         let clips_dir = export_dir.join("clips");
         std::fs::create_dir_all(&clips_dir).unwrap();
         std::fs::write(clips_dir.join("a1.wav"), tiny_wav_bytes()).unwrap();
-        let line = r#"{"annotationId":"a1","clipPath":"clips/a1.wav","clipSha256":"s","clipDurationSec":1.0,"clipSampleRate":16000,"labelKey":"end_of_turn","labelValue":1,"startSec":0.0,"endSec":1.0,"padSec":0.0,"sourceFileId":"f","sourceFileSha256":"s","labellerId":1,"reviewStatus":null,"split":"train"}"#;
+        let line = r#"{"annotationId":"a1","clipPath":"clips/a1.wav","clipSha256":"s","clipDurationSec":1.0,"clipSampleRate":16000,"labelKey":"end_of_turn","labelValue":1,"startSec":0.0,"endSec":1.0,"padSec":0.0,"sourceFileId":"f","sourceFileSha256":"s","labellerId":"u1","reviewStatus":null,"split":"train"}"#;
         std::fs::write(export_dir.join("manifest.jsonl"), format!("{line}\n")).unwrap();
 
         let outcome = run(AdaptOptions {
@@ -551,7 +549,7 @@ mod tests {
         let clips_dir = export_dir.join("clips");
         std::fs::create_dir_all(&clips_dir).unwrap();
         std::fs::write(clips_dir.join("bad.wav"), b"definitely not a wav").unwrap();
-        let line = r#"{"annotationId":"bad","clipPath":"clips/bad.wav","clipSha256":"s","clipDurationSec":1.0,"clipSampleRate":16000,"labelKey":"end_of_turn","labelValue":1,"startSec":0.0,"endSec":1.0,"padSec":0.0,"sourceFileId":"f","sourceFileSha256":"s","labellerId":1,"reviewStatus":"approved","split":"train"}"#;
+        let line = r#"{"annotationId":"bad","clipPath":"clips/bad.wav","clipSha256":"s","clipDurationSec":1.0,"clipSampleRate":16000,"labelKey":"end_of_turn","labelValue":1,"startSec":0.0,"endSec":1.0,"padSec":0.0,"sourceFileId":"f","sourceFileSha256":"s","labellerId":"u1","reviewStatus":"approved","split":"train"}"#;
         std::fs::write(export_dir.join("manifest.jsonl"), format!("{line}\n")).unwrap();
 
         let err = run(AdaptOptions {
@@ -580,7 +578,7 @@ mod tests {
         let clips_dir = export_dir.join("clips");
         std::fs::create_dir_all(&clips_dir).unwrap();
         std::fs::write(clips_dir.join("a1.wav"), b"x").unwrap();
-        let line = r#"{"annotationId":"a1","clipPath":"clips/a1.wav","clipSha256":"s","clipDurationSec":1.0,"clipSampleRate":16000,"labelKey":"speaker_change","labelValue":1,"startSec":0.0,"endSec":1.0,"padSec":0.0,"sourceFileId":"f","sourceFileSha256":"s","labellerId":1,"reviewStatus":"approved","split":"train"}"#;
+        let line = r#"{"annotationId":"a1","clipPath":"clips/a1.wav","clipSha256":"s","clipDurationSec":1.0,"clipSampleRate":16000,"labelKey":"speaker_change","labelValue":1,"startSec":0.0,"endSec":1.0,"padSec":0.0,"sourceFileId":"f","sourceFileSha256":"s","labellerId":"u1","reviewStatus":"approved","split":"train"}"#;
         std::fs::write(export_dir.join("manifest.jsonl"), format!("{line}\n")).unwrap();
 
         let err = run(AdaptOptions {
