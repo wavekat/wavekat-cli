@@ -104,6 +104,11 @@ can target the same signal):
   "command failed" from "command succeeded but returned an empty list",
   rely on the exit status and the JSON document on stdout — never on
   parsing stderr.
+- When a request never reaches the server (DNS failure, refused
+  connection, timeout), the first line reads `couldn't look up <host>
+  (DNS failed) — check your network connection …` (or `couldn't connect
+  to` / `timed out reaching`). That's a local network problem, not a
+  `wk` bug — retry once connectivity is back.
 
 ## Self-update
 

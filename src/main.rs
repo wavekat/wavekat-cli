@@ -147,7 +147,39 @@ async fn main() -> Result<()> {
             telemetry::report_error(command_name, started.elapsed(), err);
         }
     }
-    result
+    result.map_err(explain_network_error)
+}
+
+/// Put a plain-language headline on errors where the request never
+/// reached the server (DNS failure, refused connection, timeout). The
+/// raw reqwest/hyper chain (`client error (Connect)` → `dns error` →
+/// `failed to lookup address information: Try again`) reads like a
+/// `wk` bug when it's really the network; the original chain stays
+/// underneath as "Caused by" for debugging.
+fn explain_network_error(err: anyhow::Error) -> anyhow::Error {
+    let Some(req_err) = err
+        .chain()
+        .find_map(|e| e.downcast_ref::<reqwest::Error>())
+        .filter(|e| e.is_connect() || e.is_timeout())
+    else {
+        return err;
+    };
+    let host = req_err
+        .url()
+        .and_then(|u| u.host_str())
+        .unwrap_or("the server")
+        .to_string();
+    let dns = err.chain().any(|e| e.to_string().contains("dns error"));
+    let what = if dns {
+        format!("couldn't look up {host} (DNS failed)")
+    } else if req_err.is_timeout() {
+        format!("timed out reaching {host}")
+    } else {
+        format!("couldn't connect to {host}")
+    };
+    err.context(format!(
+        "{what} — check your network connection (Wi-Fi, VPN, proxy) and try again"
+    ))
 }
 
 async fn dispatch(cmd: Command) -> Result<()> {
@@ -207,5 +239,33 @@ mod tests {
         assert!(!reports_errors("admin"));
         assert!(!reports_errors("api"));
         assert!(reports_errors("exports"));
+    }
+
+    #[tokio::test]
+    async fn connect_errors_get_network_headline() {
+        // Nothing listens on port 1 locally, so this fails at connect.
+        let raw = reqwest::get("http://127.0.0.1:1/").await.unwrap_err();
+        let err = explain_network_error(anyhow::Error::new(raw).context("GET http://127.0.0.1:1/"));
+        assert_eq!(
+            err.to_string(),
+            "couldn't connect to 127.0.0.1 — check your network connection (Wi-Fi, VPN, proxy) and try again"
+        );
+    }
+
+    #[tokio::test]
+    async fn dns_errors_say_dns() {
+        // `.invalid` is reserved (RFC 6761) and never resolves.
+        let raw = reqwest::get("http://wk-test.invalid/").await.unwrap_err();
+        let err = explain_network_error(anyhow::Error::new(raw));
+        assert_eq!(
+            err.to_string(),
+            "couldn't look up wk-test.invalid (DNS failed) — check your network connection (Wi-Fi, VPN, proxy) and try again"
+        );
+    }
+
+    #[test]
+    fn other_errors_pass_through() {
+        let err = explain_network_error(anyhow::anyhow!("boom"));
+        assert_eq!(err.to_string(), "boom");
     }
 }
