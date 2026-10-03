@@ -39,7 +39,7 @@ with `--help` to see all flags, or jump to the [Examples](#examples).
 | `wk exports delete <export-id> --yes`             | soft-delete an export (cleanup sweep purges later) |
 | `wk exports adapt smart-turn …`                   | convert a downloaded export into HF `datasets` Parquet shards |
 | `wk config telemetry on\|off\|status`              | toggle crash / error reporting (see [Crash reporting](#crash-reporting)) |
-| `wk admin …`                                      | root-only platform analytics — users, Voice installs, usage funnel, downloads, prompt usage, geography — as JSON (see [Admin analytics](#admin-analytics)) |
+| `wk admin …`                                      | root-only platform analytics — users, Voice installs, usage funnel, downloads, prompt usage, geography — as JSON, plus fleet tags for reviewing installs and users (see [Admin analytics](#admin-analytics)) |
 | `wk api <path>`                                   | GET any platform endpoint and print its JSON, like `gh api` |
 
 Every list command supports `--page` / `--page-size` (default 20) and prints a
@@ -243,6 +243,7 @@ wk admin users list -q pageSize=100          # users + headline stats
 wk admin users show <user-id>                # one user's activity summary
 wk admin installs metrics -q days=30         # Voice fleet: active installs, versions, channels
 wk admin installs events <install-id>        # one install's usage events
+wk admin installs story <install-id>         # one install's story: events + tag changes by day
 wk admin usage                               # usage-event funnel
 wk admin downloads metrics                   # download numbers
 wk admin prompts callers                     # voice-prompt spend per caller
@@ -260,9 +261,38 @@ use `wk api`:
 wk api /api/admin/voice/installs -q channel=beta -q pageSize=50
 ```
 
-Both are GET-only. A token from a non-root account gets a `403`. Errors
-from these two commands are never sent to crash reporting, because their
-URLs and response bodies can identify customers.
+Apart from the fleet-tag commands below, both are GET-only. A token from
+a non-root account gets a `403`. Errors from these two commands are never
+sent to crash reporting, because their URLs and response bodies can
+identify customers.
+
+### Reviewing installs with fleet tags
+
+Fleet tags record what a review found, so findings can be counted across
+the fleet instead of living in someone's head. Tag what you learned — a
+status like `reviewed`, a cause like `signin-failed` — rather than writing
+notes; there is deliberately no free-text field.
+
+```sh
+wk admin tags list                                       # the tag vocabulary, with counts
+wk admin tags create signin-failed --color red \
+  --description "Added a line but it never signed in"    # a new tag
+wk admin installs tags <install-id>                      # tags on one install
+wk admin installs tag <install-id> reviewed              # add a tag
+wk admin installs untag <install-id> reviewed            # remove it
+```
+
+`users story` / `tags` / `tag` / `untag` do the same for a user.
+
+- An install can be named by either id: the row id from the admin page's
+  URL, or the install id the app reports. An id that matches no install
+  is refused rather than tagged.
+- Tags are referred to by name.
+- Every write is safe to repeat: creating a tag that exists prints the
+  existing tag, tagging twice keeps one tag, and untagging a tag that
+  isn't there prints `{"ok": true, "removed": false}`.
+- Removing a tag keeps it on the subject's story, attributed to you.
+  Renaming and archiving tags happen on the admin Tags page.
 
 ## API reference
 
@@ -287,6 +317,11 @@ Each command maps to a single platform endpoint:
 | `wk admin installs metrics` / `list`        | `GET /api/admin/voice/installs/metrics` / `GET /api/admin/voice/installs` |
 | `wk admin installs show <id>`               | `GET /api/admin/voice/installs/{id}` (`--install-id`: `…/installs/by-install-id/{installId}`) |
 | `wk admin installs events <install-id>`     | `GET /api/admin/voice/installs/by-install-id/{installId}/events` |
+| `wk admin installs story <id>` / `users story <id>` | `GET /api/admin/voice/stories/installs/{installId}` / `…/stories/users/{userId}` |
+| `wk admin tags list` / `create <name>`      | `GET /api/admin/voice/fleet-tags` / `POST /api/admin/voice/fleet-tags` |
+| `wk admin installs tags <id>` / `users tags <id>` | `GET /api/admin/voice/fleet-tag-assignments` |
+| `wk admin installs tag <id> <tag>` / `users tag …` | `POST /api/admin/voice/fleet-tag-assignments` |
+| `wk admin installs untag <id> <tag>` / `users untag …` | `DELETE /api/admin/voice/fleet-tag-assignments/{id}` |
 | `wk admin usage`                            | `GET /api/admin/voice/usage` |
 | `wk admin downloads metrics` / `list`       | `GET /api/admin/voice/downloads/metrics` / `GET /api/admin/voice/downloads` |
 | `wk admin prompts usage` / `callers` / `events` | `GET /api/admin/voice/prompt-usage` / `prompt-callers` / `prompt-events` |

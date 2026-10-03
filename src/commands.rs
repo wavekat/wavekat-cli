@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod admin_tags;
 pub mod agents;
 pub mod annotations;
 pub mod api;

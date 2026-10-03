@@ -79,7 +79,10 @@ and the layout is not stable.
 view; `--json` is accepted and ignored). Their output is the platform
 endpoint's response body **unchanged**, so its shape is whatever the
 endpoint returns — read it from `wk admin spec` (the OpenAPI document)
-rather than from this table.
+rather than from this table. Two exceptions, both from the fleet-tag
+commands: `installs tags` / `users tags` print `{assignments: […]}`
+(removed ones included, `removedAt` set), and `installs untag` /
+`users untag` print `{ok: true, removed: <bool>}`.
 
 Local file producers (`wk exports download`, `wk exports adapt smart-turn`)
 write files to disk and print the output path on stdout. Progress goes
@@ -243,8 +246,9 @@ wk exports create "$PROJECT_ID" \
 
 ### Analyse customers and product usage (root accounts only)
 
-Every `wk admin` command is a GET against a root-only endpoint. Start
-from the spec so you know what each endpoint returns and accepts:
+Every `wk admin` read is a GET against a root-only endpoint (the
+fleet-tag writes are covered in the next recipe). Start from the spec so
+you know what each endpoint returns and accepts:
 
 ```sh
 wk admin spec | jq '.paths | keys[] | select(startswith("/api/admin") or startswith("/api/users"))'
@@ -270,6 +274,26 @@ Anything without a named command is one `wk api` call away:
 wk api /api/admin/voice/downloads -q pageSize=50
 ```
 
+### Review an install and record what you found (root accounts only)
+
+Read the install's story, decide what happened, and record it as tags:
+a status tag (`reviewed`) plus a cause tag naming the finding. Reuse an
+existing cause tag when one fits — tag counts are how findings become
+priorities, so near-duplicate tags split the count.
+
+```sh
+wk admin installs story <install-id>                 # events + tag changes, by day
+wk admin installs events <install-id> -q limit=200   # the raw events, if you need detail
+wk admin tags list | jq '.tags[] | {name, description, installs}'
+wk admin tags create <cause> --color red --description "<what it means>"
+wk admin installs tag <install-id> <cause>
+wk admin installs tag <install-id> reviewed
+```
+
+To find installs nobody has reviewed yet, page through `wk admin
+installs list` and check each one's tags with `wk admin installs tags
+<install-id>`.
+
 ## Quirks worth knowing
 
 - **`wk login` runs a loopback OAuth handshake.** Don't try to script
@@ -289,6 +313,13 @@ wk api /api/admin/voice/downloads -q pageSize=50
   no client-side check; the platform decides.
 - **`wk api` is GET-only.** It will not create, change or delete
   anything; mutations stay behind dedicated commands.
+- **The fleet-tag commands are the only `wk admin` writes, and all of
+  them are safe to retry.** `tags create` on an existing name prints the
+  existing tag; `installs tag` on a tag already present returns the
+  existing assignment; `installs untag` on a missing tag reports
+  `removed: false`. Install commands accept either the row id or the
+  app's install id and refuse an id that matches no install. There's no
+  free-text note on purpose — record findings as tags.
 - **Errors from `wk admin` / `wk api` are not sent to crash reporting**,
   because their URLs and bodies can identify customers.
 - **All list endpoints paginate.** Default `--page-size` is 20. Use
