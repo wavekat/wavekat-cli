@@ -43,7 +43,7 @@ Resources:
   files        Manage project files (list, reserve / unreserve test set)
 
 Admin & raw API:
-  admin        Root-only platform analytics (users, installs, usage, …) as JSON
+  admin        Root-only platform analytics and fleet tags (users, installs, usage, …) as JSON
   api          GET any platform endpoint and print its JSON (`wk api /api/admin/geo`)
 
 CLI:
@@ -106,7 +106,7 @@ enum Command {
         #[command(subcommand)]
         command: commands::files::Cmd,
     },
-    /// Root-only platform analytics (users, installs, usage, …) as JSON
+    /// Root-only platform analytics and fleet tags (users, installs, usage, …) as JSON
     Admin {
         #[command(subcommand)]
         command: commands::admin::Cmd,
