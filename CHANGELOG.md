@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.28](https://github.com/wavekat/wavekat-cli/compare/v0.0.27...v0.0.28) - 2026-10-03
+
+### Added
+
+- review installs with fleet tags ([#69](https://github.com/wavekat/wavekat-cli/pull/69))
+
+### Other
+
+- move arm64 release build to macos-latest ([#67](https://github.com/wavekat/wavekat-cli/pull/67))
+
 ## [0.0.27](https://github.com/wavekat/wavekat-cli/compare/v0.0.26...v0.0.27) - 2026-09-28
 
 ### Fixed
