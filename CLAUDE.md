@@ -3,6 +3,33 @@
 Guidance for Claude (and any agent editing this repo) on conventions
 specific to `wavekat-cli`.
 
+## Public-repo hygiene
+
+`wavekat-cli` is a **public** repository. The platform's own code, and
+the other products that use it, are **private**, and outside
+contributors can't see them. Anything checked into this repo — source,
+comments, tests, docs, commit messages, PR titles and descriptions —
+must read on its own without depending on them.
+
+- Do **not** name private repos, or their files, modules, internal doc
+  numbers or unreleased features. Describe a platform endpoint by its
+  public path (`/api/admin/voice/installs`) and what it returns; if the
+  reason for a change lives in a private design note, explain it here in
+  your own words instead of linking to it.
+- Do **not** put real customer data anywhere in the repo. `wk admin`
+  reads real users and installs, so this is easy to leak by accident:
+  no real install ids, user ids, logins, emails, locales-plus-dates or
+  anything else that points at one person, in examples, tests, fixtures
+  or PR bodies. Use placeholders (`<install-id>`, `u1`, `abc`). A PR's
+  manual-testing notes say *what* was checked ("an unknown install id is
+  refused"), never *which* install it was checked on.
+- Generic product words ("Voice installs", "usage events", "fleet tags")
+  describe what the commands do and are fine — the rule is about private
+  code and private people, not the problem space.
+
+Before committing or opening a PR, scan the diff (untracked files too)
+for real ids, names and private repo names.
+
 ## Adding, removing, or changing a `wk` command
 
 The CLI surface is documented in **multiple places** that all have to
