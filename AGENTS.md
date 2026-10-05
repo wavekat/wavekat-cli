@@ -61,6 +61,7 @@ and the layout is not stable.
 | Command                                     | `--json` shape (top-level keys)                              |
 |---------------------------------------------|--------------------------------------------------------------|
 | `wk version --json`                         | `cli`, `api`, `endpoint`                                     |
+| `wk me --json`                              | full `/api/me` body (`id`, `login`, `email`, `role`, `tier`, …)  |
 | `wk projects list --json`                   | `projects`, `page`, `pageSize`, `total`, `totalPages`        |
 | `wk projects show <id> --json`              | full project row                                             |
 | `wk annotations list <project-id> --json`   | `annotations`, `page`, `pageSize`, `total`, `totalPages`     |
