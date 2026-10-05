@@ -47,8 +47,15 @@ impl Client {
                 anyhow!("no credentials in config — run `wk login` to authenticate")
             }
         })?;
-        let inner =
-            Inner::new(cfg.base_url.as_str(), Token::new(token)).context("building HTTP client")?;
+        // `wavekat-cli/<version>` is what the platform parses to attribute
+        // requests to the CLI (its usage analytics' version column); the
+        // crate's default User-Agent leaves that blank.
+        let inner = Inner::with_user_agent(
+            cfg.base_url.as_str(),
+            Token::new(token),
+            concat!("wavekat-cli/", env!("CARGO_PKG_VERSION")),
+        )
+        .context("building HTTP client")?;
         Ok(Self { inner })
     }
 
