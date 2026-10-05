@@ -80,7 +80,7 @@ enum Command {
     /// Forget stored credentials
     Logout,
     /// Show the currently signed-in user (`GET /api/me`)
-    Me,
+    Me(commands::me::Args),
     /// Manage projects
     Projects {
         #[command(subcommand)]
@@ -186,7 +186,7 @@ async fn dispatch(cmd: Command) -> Result<()> {
     match cmd {
         Command::Login(args) => commands::login::run(args).await,
         Command::Logout => commands::logout::run().await,
-        Command::Me => commands::me::run().await,
+        Command::Me(args) => commands::me::run(args).await,
         Command::Projects { command } => commands::projects::run(command).await,
         Command::Annotations { command } => commands::annotations::run(command).await,
         Command::Exports { command } => commands::exports::run(command).await,
@@ -215,7 +215,7 @@ fn command_name(cmd: &Command) -> &'static str {
     match cmd {
         Command::Login(_) => "login",
         Command::Logout => "logout",
-        Command::Me => "me",
+        Command::Me(_) => "me",
         Command::Projects { .. } => "projects",
         Command::Annotations { .. } => "annotations",
         Command::Exports { .. } => "exports",

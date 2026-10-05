@@ -28,7 +28,7 @@ with `--help` to see all flags, or jump to the [Examples](#examples).
 | Command | What it shows |
 |---------|---------------|
 | `wk login` / `wk logout`                          | sign in via your browser, or sign out |
-| `wk me`                                           | who you're signed in as |
+| `wk me`                                           | who you're signed in as (`--json` for raw) |
 | `wk projects list`                                | projects you can see, with your role, file/record counts, and review progress |
 | `wk projects show <id>`                           | details for one project (`--json` for raw) |
 | `wk annotations list <project-id>`                | paginated annotations with inline ASR text |
