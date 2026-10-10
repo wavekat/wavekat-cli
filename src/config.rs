@@ -21,10 +21,13 @@ pub struct AuthConfig {
     pub session_cookie: Option<String>,
     /// Global role of the signed-in account (`role` from `/api/me`),
     /// cached by `wk login` and refreshed by `wk me`. Only used to
-    /// decide whether `wk --help` lists root-only commands; the
-    /// platform still enforces access on every request.
+    /// shape `wk --help`; the platform still enforces access.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    /// Modules granted to the account (`features` from `/api/me`),
+    /// cached alongside `role` for the same purpose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub features: Option<Vec<String>>,
     /// Anonymous per-machine identifier used by crash reporting to
     /// distinguish "this is the same install hitting the error 10
     /// times" from "10 different installs each hit it once." Generated
@@ -119,6 +122,21 @@ pub fn ensure_install_id() -> Option<String> {
     // Persistence failure is non-fatal — we just regenerate next run.
     let _ = save(&cfg);
     Some(id)
+}
+
+/// Cache the parts of a `/api/me` body that shape `wk --help`. Returns
+/// whether anything changed.
+pub fn remember_account(cfg: &mut AuthConfig, me: &serde_json::Value) -> bool {
+    let role = me.get("role").and_then(|v| v.as_str()).map(str::to_string);
+    let features = me.get("features").and_then(|v| v.as_array()).map(|a| {
+        a.iter()
+            .filter_map(|f| f.as_str().map(str::to_string))
+            .collect()
+    });
+    let changed = cfg.role != role || cfg.features != features;
+    cfg.role = role;
+    cfg.features = features;
+    changed
 }
 
 pub fn save(cfg: &AuthConfig) -> Result<()> {

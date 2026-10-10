@@ -5,6 +5,7 @@ mod audio;
 mod client;
 mod commands;
 mod config;
+mod help;
 mod progress;
 mod style;
 mod telemetry;
@@ -22,69 +23,14 @@ const VERSION: &str = concat!(
     env!("CARGO_PKG_REPOSITORY"),
 );
 
-// clap has no first-class way to group subcommands under headings in
-// the top-level help, so we render the command list ourselves via
-// `help_template` and replace clap's default `{subcommands}` block.
-// Keep this in sync with the `Command` enum below.
-const HELP_HEAD: &str = "\
-{about-with-newline}
-{usage-heading} {usage}
-
-Account:
-  login        Authenticate against a WaveKat platform instance
-  logout       Forget stored credentials
-  me           Show the currently signed-in user (`GET /api/me`)
-
-Resources:
-  projects     Manage projects
-  annotations  Manage annotations
-  exports      Manage dataset exports
-  models       Manage trained models (push, list, download)
-  files        Manage project files (list, reserve / unreserve test set)
-
-";
-
-// Only shown to accounts whose cached role is `root` — see `show_admin`.
-const HELP_ADMIN: &str = "\
-Admin & raw API:
-  admin        Root-only platform analytics and fleet tags (users, installs, usage, …) as JSON
-";
-
-const HELP_RAW_API: &str = "\
-Raw API:
-";
-
-const HELP_TAIL: &str =
-    "  api          GET any platform endpoint and print its JSON (`wk api /api/me`)
-
-CLI:
-  config       Read or change persisted CLI preferences (telemetry, …)
-  version      Print the local CLI version and probe the platform's `/api/health`
-  update       Replace this binary with the latest release (or `--check` to peek)
-  agents       Print the bundled AGENTS.md guide for AI agents using `wk`
-  help         Print this message or the help of the given subcommand(s)
-
-Options:
-{options}{after-help}";
-
-fn help_template(show_admin: bool) -> String {
-    let section = if show_admin { HELP_ADMIN } else { HELP_RAW_API };
-    format!("{HELP_HEAD}{section}{HELP_TAIL}")
-}
-
-/// Whether `wk admin` is listed in help. Only root accounts can use it,
-/// so everyone else shouldn't see it. This reads the role cached by
-/// `wk login` / `wk me` — no network call — and is cosmetic only: the
-/// command stays callable and the platform still enforces the role.
-fn show_admin(cfg: &config::AuthConfig) -> bool {
-    cfg.role.as_deref() == Some("root")
-}
-
-/// The clap command with help shaped for the signed-in account.
-fn cli_command(show_admin: bool) -> clap::Command {
-    Cli::command()
-        .help_template(help_template(show_admin))
-        .mut_subcommand("admin", |c| c.hide(!show_admin))
+/// The clap command with help shaped for the signed-in account; see
+/// `help.rs`. Hidden subcommands still parse.
+fn cli_command(access: &help::Access) -> clap::Command {
+    let mut cmd = Cli::command().help_template(access.help_template());
+    for name in access.hidden_commands() {
+        cmd = cmd.mut_subcommand(name, |c| c.hide(true));
+    }
+    cmd
 }
 
 #[derive(Parser)]
@@ -163,9 +109,9 @@ async fn main() -> Result<()> {
     // flushes pending events on exit (with a short timeout).
     let _telemetry = telemetry::init();
 
-    let show_admin = show_admin(&config::load_or_default());
+    let access = help::Access::from_config(&config::load_or_default());
     let cli =
-        Cli::from_arg_matches(&cli_command(show_admin).get_matches()).unwrap_or_else(|e| e.exit());
+        Cli::from_arg_matches(&cli_command(&access).get_matches()).unwrap_or_else(|e| e.exit());
     let command_name = command_name(&cli.command);
 
     // First-run notice goes to stderr after parsing succeeded —
@@ -266,40 +212,32 @@ fn command_name(cmd: &Command) -> &'static str {
 mod tests {
     use super::*;
 
-    fn render_help(show_admin: bool) -> String {
-        cli_command(show_admin).render_help().to_string()
-    }
-
     #[test]
-    fn admin_listed_only_for_root() {
-        let root = render_help(true);
-        assert!(root.contains("Admin & raw API:"), "{root}");
-        assert!(root.contains("  admin "), "{root}");
-
-        let user = render_help(false);
-        assert!(!user.contains("admin"), "{user}");
-        assert!(user.contains("Raw API:"), "{user}");
-        assert!(user.contains("  api "), "{user}");
-    }
-
-    #[test]
-    fn show_admin_needs_cached_root_role() {
-        let with_role = |role: Option<&str>| config::AuthConfig {
-            role: role.map(str::to_string),
+    fn help_hides_ungranted_commands() {
+        let cfg = config::AuthConfig {
+            role: Some("user".into()),
+            features: Some(vec!["voice".into()]),
             ..Default::default()
         };
-        assert!(show_admin(&with_role(Some("root"))));
-        assert!(!show_admin(&with_role(Some("user"))));
-        assert!(!show_admin(&with_role(None)));
+        let help = cli_command(&help::Access::from_config(&cfg))
+            .render_help()
+            .to_string();
+        assert!(!help.contains("projects"), "{help}");
+        assert!(!help.contains("admin"), "{help}");
+        assert!(help.contains("  api "), "{help}");
     }
 
     #[test]
-    fn hidden_admin_still_parses() {
-        let m = cli_command(false)
-            .try_get_matches_from(["wk", "admin", "geo"])
-            .unwrap();
-        let cli = Cli::from_arg_matches(&m).unwrap();
-        assert_eq!(command_name(&cli.command), "admin");
+    fn hidden_commands_still_parse() {
+        let access = help::Access::from_config(&config::AuthConfig::default());
+        for (argv, name) in [
+            (["wk", "admin", "geo"], "admin"),
+            (["wk", "projects", "list"], "projects"),
+        ] {
+            let m = cli_command(&access).try_get_matches_from(argv).unwrap();
+            let cli = Cli::from_arg_matches(&m).unwrap();
+            assert_eq!(command_name(&cli.command), name);
+        }
     }
 
     #[test]

@@ -41,11 +41,10 @@ declaring the change done:
    enum, add the dispatch arm in `main()`, update `command_name()` for
    telemetry, and update the top-level `long_about` if the change
    affects the bootstrap story (auth, self-update, agents guide). The
-   `wk --help` listing is rendered from hand-written `HELP_*` template
-   pieces joined by `help_template()` (clap can't group subcommands
-   itself), so add the new command under the right heading (Account /
-   Resources / CLI) there too. Root-only commands go in `HELP_ADMIN`
-   and are hidden from non-root accounts in `cli_command()`.
+   `wk --help` listing is rendered from the hand-written `SECTIONS`
+   table in `src/help.rs` (clap can't group subcommands itself), so add
+   the new command under the right heading there too, with the `Gate`
+   (module or root) that decides who sees it.
 2. **`src/commands.rs`** — add/remove the `pub mod` line.
 3. **`src/commands/<name>.rs`** — the command itself. Every read
    command should support `--json` (see existing commands for the

@@ -25,7 +25,7 @@ struct Me {
 pub async fn run(args: Args) -> Result<()> {
     let client = Client::from_config()?;
     let v: serde_json::Value = client.get_json("/api/me").await?;
-    remember_role(v.get("role").and_then(|r| r.as_str()));
+    remember_account(&v);
     if args.json {
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
@@ -40,15 +40,14 @@ pub async fn run(args: Args) -> Result<()> {
     Ok(())
 }
 
-/// Keep the cached role current, so a promotion or demotion shows up in
-/// `wk --help` without a fresh `wk login`. Best-effort: a failed write
-/// never fails `wk me`.
-fn remember_role(role: Option<&str>) {
+/// Keep the cached role and modules current, so a role change or a new
+/// module grant shows up in `wk --help` without a fresh `wk login`.
+/// Best-effort: a failed write never fails `wk me`.
+fn remember_account(me: &serde_json::Value) {
     let Ok(mut cfg) = config::load() else {
         return;
     };
-    if cfg.role.as_deref() != role {
-        cfg.role = role.map(str::to_string);
+    if config::remember_account(&mut cfg, me) {
         let _ = config::save(&cfg);
     }
 }

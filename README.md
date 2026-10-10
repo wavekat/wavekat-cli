@@ -232,6 +232,25 @@ This both validates the source bytes (corrupt or non-WAV clips fail at
 adapt time, with the failing path in the error) and guarantees the
 shards contain a uniform shape downstream notebooks can rely on.
 
+## What `wk --help` shows
+
+`wk --help` lists only the commands your account can use. The platform
+grants each account a set of modules, and new accounts start with just
+`voice`:
+
+| Commands                    | Shown when the account has |
+|-----------------------------|----------------------------|
+| `projects`, `files`         | the `projects` module      |
+| `annotations`               | the `labeling` module      |
+| `exports`                   | the `datasets` module      |
+| `models`                    | the `models` module        |
+| `admin`                     | the global `root` role     |
+
+Root accounts see everything. Account, `api` and CLI commands are always
+listed. Your role and modules are cached when you `wk login` and
+refreshed by `wk me`, so after you're granted a module, run `wk me` once.
+Hidden commands still run; the platform decides what you can access.
+
 ## Admin analytics
 
 For people with the global `root` role on the platform. `wk admin` wraps
@@ -267,9 +286,8 @@ sent to crash reporting, because their URLs and response bodies can
 identify customers.
 
 `wk --help` only lists `admin` when you're signed in as `root`; for
-everyone else it's hidden, though still callable. The role is cached
-when you `wk login` and refreshed by `wk me`, so after a role change run
-`wk me` once to update the listing.
+everyone else it's hidden, though still callable. See
+[What `wk --help` shows](#what-wk---help-shows).
 
 ### Reviewing installs with fleet tags
 
