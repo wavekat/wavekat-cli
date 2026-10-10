@@ -311,7 +311,10 @@ installs list` and check each one's tags with `wk admin installs tags
   toward progress, so resumes look fast.
 - **`wk admin` needs the global `root` role.** Any other token gets a
   `403`, reported as `forbidden — wk admin needs … root role`. There is
-  no client-side check; the platform decides.
+  no client-side check; the platform decides. `wk --help` hides
+  `admin` unless the role cached by `wk login` / `wk me` is `root` —
+  the command still runs either way, so a missing listing isn't proof
+  the account lacks access (run `wk me` to refresh it).
 - **`wk api` is GET-only.** It will not create, change or delete
   anything; mutations stay behind dedicated commands.
 - **The fleet-tag commands are the only `wk admin` writes, and all of

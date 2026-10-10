@@ -85,7 +85,9 @@ pub async fn run(args: Args) -> Result<()> {
         .await
         .context("verifying token against /api/me")?;
     let login = me.get("login").and_then(|v| v.as_str()).unwrap_or("?");
-    let role = me.get("role").and_then(|v| v.as_str()).unwrap_or("?");
+    let role = me.get("role").and_then(|v| v.as_str());
+    cfg.role = role.map(str::to_string);
+    let role = role.unwrap_or("?");
 
     config::save(&cfg)?;
     let path = config::auth_path()?;

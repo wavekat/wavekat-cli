@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 
 mod audio;
 mod client;
@@ -26,7 +26,7 @@ const VERSION: &str = concat!(
 // the top-level help, so we render the command list ourselves via
 // `help_template` and replace clap's default `{subcommands}` block.
 // Keep this in sync with the `Command` enum below.
-const HELP_TEMPLATE: &str = "\
+const HELP_HEAD: &str = "\
 {about-with-newline}
 {usage-heading} {usage}
 
@@ -42,9 +42,20 @@ Resources:
   models       Manage trained models (push, list, download)
   files        Manage project files (list, reserve / unreserve test set)
 
+";
+
+// Only shown to accounts whose cached role is `root` — see `show_admin`.
+const HELP_ADMIN: &str = "\
 Admin & raw API:
   admin        Root-only platform analytics and fleet tags (users, installs, usage, …) as JSON
-  api          GET any platform endpoint and print its JSON (`wk api /api/admin/geo`)
+";
+
+const HELP_RAW_API: &str = "\
+Raw API:
+";
+
+const HELP_TAIL: &str =
+    "  api          GET any platform endpoint and print its JSON (`wk api /api/me`)
 
 CLI:
   config       Read or change persisted CLI preferences (telemetry, …)
@@ -56,6 +67,26 @@ CLI:
 Options:
 {options}{after-help}";
 
+fn help_template(show_admin: bool) -> String {
+    let section = if show_admin { HELP_ADMIN } else { HELP_RAW_API };
+    format!("{HELP_HEAD}{section}{HELP_TAIL}")
+}
+
+/// Whether `wk admin` is listed in help. Only root accounts can use it,
+/// so everyone else shouldn't see it. This reads the role cached by
+/// `wk login` / `wk me` — no network call — and is cosmetic only: the
+/// command stays callable and the platform still enforces the role.
+fn show_admin(cfg: &config::AuthConfig) -> bool {
+    cfg.role.as_deref() == Some("root")
+}
+
+/// The clap command with help shaped for the signed-in account.
+fn cli_command(show_admin: bool) -> clap::Command {
+    Cli::command()
+        .help_template(help_template(show_admin))
+        .mut_subcommand("admin", |c| c.hide(!show_admin))
+}
+
 #[derive(Parser)]
 #[command(
     name = "wk",
@@ -66,7 +97,6 @@ Options:
                   config dir (e.g. ~/.config/wavekat/auth.json on Linux/macOS).\n\n\
                   Run `wk update` to upgrade in place, or `wk agents` for the AI-agent \
                   integration guide (also at https://github.com/wavekat/wavekat-cli/blob/main/AGENTS.md).",
-    help_template = HELP_TEMPLATE,
 )]
 struct Cli {
     #[command(subcommand)]
@@ -111,7 +141,7 @@ enum Command {
         #[command(subcommand)]
         command: commands::admin::Cmd,
     },
-    /// GET any platform endpoint and print its JSON (`wk api /api/admin/geo`)
+    /// GET any platform endpoint and print its JSON (`wk api /api/me`)
     Api(commands::api::Args),
     /// Read or change persisted CLI preferences (telemetry, …)
     Config {
@@ -133,7 +163,9 @@ async fn main() -> Result<()> {
     // flushes pending events on exit (with a short timeout).
     let _telemetry = telemetry::init();
 
-    let cli = Cli::parse();
+    let show_admin = show_admin(&config::load_or_default());
+    let cli =
+        Cli::from_arg_matches(&cli_command(show_admin).get_matches()).unwrap_or_else(|e| e.exit());
     let command_name = command_name(&cli.command);
 
     // First-run notice goes to stderr after parsing succeeded —
@@ -233,6 +265,42 @@ fn command_name(cmd: &Command) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn render_help(show_admin: bool) -> String {
+        cli_command(show_admin).render_help().to_string()
+    }
+
+    #[test]
+    fn admin_listed_only_for_root() {
+        let root = render_help(true);
+        assert!(root.contains("Admin & raw API:"), "{root}");
+        assert!(root.contains("  admin "), "{root}");
+
+        let user = render_help(false);
+        assert!(!user.contains("admin"), "{user}");
+        assert!(user.contains("Raw API:"), "{user}");
+        assert!(user.contains("  api "), "{user}");
+    }
+
+    #[test]
+    fn show_admin_needs_cached_root_role() {
+        let with_role = |role: Option<&str>| config::AuthConfig {
+            role: role.map(str::to_string),
+            ..Default::default()
+        };
+        assert!(show_admin(&with_role(Some("root"))));
+        assert!(!show_admin(&with_role(Some("user"))));
+        assert!(!show_admin(&with_role(None)));
+    }
+
+    #[test]
+    fn hidden_admin_still_parses() {
+        let m = cli_command(false)
+            .try_get_matches_from(["wk", "admin", "geo"])
+            .unwrap();
+        let cli = Cli::from_arg_matches(&m).unwrap();
+        assert_eq!(command_name(&cli.command), "admin");
+    }
 
     #[test]
     fn customer_data_commands_skip_error_reporting() {

@@ -266,6 +266,11 @@ a non-root account gets a `403`. Errors from these two commands are never
 sent to crash reporting, because their URLs and response bodies can
 identify customers.
 
+`wk --help` only lists `admin` when you're signed in as `root`; for
+everyone else it's hidden, though still callable. The role is cached
+when you `wk login` and refreshed by `wk me`, so after a role change run
+`wk me` once to update the listing.
+
 ### Reviewing installs with fleet tags
 
 Fleet tags record what a review found, so findings can be counted across

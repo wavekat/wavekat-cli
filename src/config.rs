@@ -19,6 +19,12 @@ pub struct AuthConfig {
     /// not written by new logins.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_cookie: Option<String>,
+    /// Global role of the signed-in account (`role` from `/api/me`),
+    /// cached by `wk login` and refreshed by `wk me`. Only used to
+    /// decide whether `wk --help` lists root-only commands; the
+    /// platform still enforces access on every request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
     /// Anonymous per-machine identifier used by crash reporting to
     /// distinguish "this is the same install hitting the error 10
     /// times" from "10 different installs each hit it once." Generated

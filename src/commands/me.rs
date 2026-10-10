@@ -3,6 +3,7 @@ use clap::Args as ClapArgs;
 use serde::Deserialize;
 
 use crate::client::Client;
+use crate::config;
 use crate::style;
 
 #[derive(ClapArgs)]
@@ -24,6 +25,7 @@ struct Me {
 pub async fn run(args: Args) -> Result<()> {
     let client = Client::from_config()?;
     let v: serde_json::Value = client.get_json("/api/me").await?;
+    remember_role(v.get("role").and_then(|r| r.as_str()));
     if args.json {
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
@@ -36,4 +38,17 @@ pub async fn run(args: Args) -> Result<()> {
     println!("{} {}", label("email:"), me.email.as_deref().unwrap_or("-"));
     println!("{} {}", label("role:"), style::role(&me.role));
     Ok(())
+}
+
+/// Keep the cached role current, so a promotion or demotion shows up in
+/// `wk --help` without a fresh `wk login`. Best-effort: a failed write
+/// never fails `wk me`.
+fn remember_role(role: Option<&str>) {
+    let Ok(mut cfg) = config::load() else {
+        return;
+    };
+    if cfg.role.as_deref() != role {
+        cfg.role = role.map(str::to_string);
+        let _ = config::save(&cfg);
+    }
 }
